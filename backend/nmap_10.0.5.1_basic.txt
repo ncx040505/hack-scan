@@ -1,0 +1,20 @@
+# Nmap 7.95 scan initiated Wed Apr  1 05:32:01 2026 as: nmap -sS -sV -sC -p 22,53,80,443 --reason --version-all --script-timeout 30s -oN nmap_10.0.5.1_basic.txt 10.0.5.1
+Nmap scan report for 10.0.5.1
+Host is up, received echo-reply ttl 63 (0.00028s latency).
+
+PORT    STATE SERVICE  REASON         VERSION
+22/tcp  open  ssh      syn-ack ttl 63 Dropbear sshd (protocol 2.0)
+53/tcp  open  domain   syn-ack ttl 63 Cloudflare public DNS
+80/tcp  open  http     syn-ack ttl 63 OpenWrt uHTTPd
+|_http-title: Site doesn't have a title (text/html).
+443/tcp open  ssl/http syn-ack ttl 63 OpenWrt uHTTPd
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=ImmortalWrt/organizationName=OpenWrt111ccb53/stateOrProvinceName=Somewhere/countryName=ZZ
+| Subject Alternative Name: DNS:ImmortalWrt
+| Not valid before: 2025-12-10T06:04:08
+|_Not valid after:  2027-12-10T06:04:08
+|_http-title: Site doesn't have a title (text/html).
+Service Info: OS: Linux; Device: WAP; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Wed Apr  1 05:32:23 2026 -- 1 IP address (1 host up) scanned in 22.08 seconds

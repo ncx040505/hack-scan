@@ -1,0 +1,99 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vulnscanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
+      - MONGODB_URL=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    volumes:
+      - ../backend:/app
+      - tools_data:/app/data/tools
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    environment:
+      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
+      - MONGODB_URL=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+      - mongodb
+    volumes:
+      - ../backend:/app
+      - tools_data:/app/data/tools
+    command: celery -A tasks.celery_app worker --loglevel=info
+
+  # Frontend (development)
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  tools_data:

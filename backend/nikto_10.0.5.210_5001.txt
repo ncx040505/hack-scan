@@ -1,0 +1,162 @@
+- Nikto v2.1.5/2.1.5
++ Target Host: 10.0.5.210
++ Target Port: 5001
++ GET /: Server leaks inodes via ETags, header found with file /, fields: 0x69c8d9a9 0x87d 
++ GET /: The anti-clickjacking X-Frame-Options header is not present.
++ GET //: File/dir '/' in robots.txt returned a non-forbidden or redirect HTTP code (200)
++ GET /robots.txt: "robots.txt" contains 1 entry which should be manually viewed.
++ GET /: Hostname '10.0.5.210' does not match certificate's CN 'fnOS'
++ GET /cgi-bin/wrap: /cgi-bin/wrap: comes with IRIX 6.2; allows to view directories
++ GET /profile.php?u=b4P4fuPj: Uncommon header 'access-control-allow-origin' found, with contents: *
++ GET /profile.php?u=b4P4fuPj: Uncommon header 'access-control-allow-methods' found, with contents: POST, GET, OPTIONS, PUT, DELETE, UPDATE
++ GET /profile.php?u=b4P4fuPj: Uncommon header 'access-control-allow-headers' found, with contents: Content-Type,AccessToken,X-CSRF-Token, Authorization
++ GET /profile.php?u=b4P4fuPj: Uncommon header 'access-control-allow-credentials' found, with contents: true
++ GET /profile.php?u=b4P4fuPj: Uncommon header 'access-control-expose-headers' found, with contents: Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type
++ GET /prd.i/pgen/: /prd.i/pgen/: Has MS Merchant Server 1.0
++ GET /pccsmysqladm/incs/dbconnect.inc: /pccsmysqladm/incs/dbconnect.inc: This file should not be accessible, as it contains database connectivity information. Upgrade to version 1.2.5 or higher.
++ GET /pbserver/pbserver.dll: /pbserver/pbserver.dll: This may contain a buffer overflow. http://www.microsoft.com/technet/security/bulletin/ms00-094.asp
++ GET /pafiledb/includes/team/file.php: /pafiledb/includes/team/file.php: paFileDB 3.1 and below may allow file upload without authentication.
++ GET /phpEventCalendar/file_upload.php: /phpEventCalendar/file_upload.php: phpEventCalendar 1.1 and prior are vulnerable to file upload bug.
++ -6467: GET /pw/storemgr.pw: /pw/storemgr.pw: Encrypted ID/Pass for Mercantec's SoftCart, http://www.mercantec.com/, see http://www.mindsec.com/advisories/post2.txt for more information.
++ -1201: GET /cgi/cgiproc?: /cgi/cgiproc?: It may be possible to crash Nortel Contivity VxWorks by requesting '/cgi/cgiproc?$' (not attempted!). Upgrade to version 2.60 or later.
++ GET /perl/-e%20print%20Hello: /perl/-e%20print%20Hello: The Perl interpreter on the Novell system may allow any command to be executed. See BID-5520. Installing Perl 5.6 might fix this issue.
++ -8450: GET /phpMyAdmin/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: /phpMyAdmin/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: phpMyAdmin allows directory listings remotely. Upgrade to version 2.5.3 or higher. BID-7963.
++ -8450: GET /phpmyadmin/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: /phpmyadmin/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: phpMyAdmin allows directory listings remotely. Upgrade to version 2.5.3 or higher. BID-7963.
++ -8450: GET /pma/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: /pma/db_details_importdocsql.php?submit_show=true&do=import&docpath=../: phpMyAdmin allows directory listings remotely. Upgrade to version 2.5.3 or higher. BID-7963.
++ GET /cgi-bin/cgi_process: /cgi-bin/cgi_process: WASD reveals a lot of system information in this script. It should be removed.
++ GET /cgi-win/cgitest.exe: /cgi-win/cgitest.exe: This CGI may allow the server to be crashed remotely, see http://www.securityoffice.net/ for details.  Remove this default CGI.
++ GET /cgi-shl/win-c-sample.exe: /cgi-shl/win-c-sample.exe: win-c-sample.exe has a buffer overflow
++ -22: GET /cgi-bin/bigconf.cgi: /cgi-bin/bigconf.cgi: BigIP Configuration CGI
++ GET /cgi-bin/MachineInfo: /cgi-bin/MachineInfo: Gives out information on the machine (IRIX), including hostname
++ GET /cgi-bin/handler: /cgi-bin/handler: Comes with IRIX 5.3 - 6.4; allows to run arbitrary commands
++ -235: GET /cgi-bin/webdist.cgi: /cgi-bin/webdist.cgi: Comes with IRIX 5.0 - 6.3; allows to run arbitrary commands
++ GET /pmlite.php: /pmlite.php: A Xoops CMS script was found. Version RC3 and below allows all users to view all messages (untested). See http://www.phpsecure.org/?zone=pComment&d=101 for details.
++ -2881: GET /pp.php?action=login: /pp.php?action=login: Pieterpost 0.10.6 allows anyone to access the 'virtual' account which can be used to relay/send e-mail.
++ GET /photo/manage.cgi: /photo/manage.cgi: My Photo Gallery management interface. May allow full access to photo galleries and more.
++ GET /photodata/manage.cgi: /photodata/manage.cgi: My Photo Gallery management interface. May allow full access to photo galleries and more.
++ -5374: GET /pub/english.cgi?op=rmail: /pub/english.cgi?op=rmail: BSCW self-registration may be enabled. This could allow untrusted users semi-trusted access to the software. 3.x version (and probably some 4.x) allow arbitrary commands to be executed remotely.
++ GET /pvote/ch_info.php?newpass=password&confirm=password%20: /pvote/ch_info.php?newpass=password&confirm=password%20: PVote administration page is available. Versions 1.5b and lower do not require authentication to reset the administration password.
++ -250: GET /cgis/wwwboard/wwwboard.cgi: /cgis/wwwboard/wwwboard.cgi: Versions 2.0 Alpha and below have multiple problems. See BID-1795 which could allow over-write of messages. Default ID 'WebAdmin' with pass 'WebBoard'.
++ -250: GET /cgis/wwwboard/wwwboard.pl: /cgis/wwwboard/wwwboard.pl: Versions 2.0 Alpha and below have multiple problems. See BID-1795 which could allow over-write of messages. Default ID 'WebAdmin' with pass 'WebBoard'.
++ -1264: GET /publisher/: /publisher/: Netscape Enterprise Server with Web Publishing can allow attackers to edit web pages and/or list arbitrary directories via Java applet. CVE-2000-0237.
++ -134: GET /cgi-bin/pfdisplay.cgi?../../../../../../etc/passwd: /cgi-bin/pfdisplay.cgi?../../../../../../etc/passwd: Comes with IRIX 6.2-6.4; allows to run arbitrary commands
++ -2695: GET /photo/: /photo/: My Photo Gallery pre 3.6 contains multiple vulnerabilities including directory traversal, unspecified vulnerabilities and remote management interface access.
++ -2695: GET /photodata/: /photodata/: My Photo Gallery pre 3.6 contains multiple vulnerabilities including directory traversal, unspecified vulnerabilities and remote management interface access.
++ -3092: GET /pages/: /pages/: This might be interesting...
++ -3092: GET /passwd: /passwd: This could be interesting...
++ -3092: GET /passwd.adjunct: /passwd.adjunct: This could be interesting...
++ -3092: GET /passwd.txt: /passwd.txt: This could be interesting...
++ -3092: GET /passwdfile: /passwdfile: This might be interesting...
++ -3092: GET /password: /password: This could be interesting...
++ -3092: GET /passwords.txt: /passwords.txt: This could be interesting...
++ -3092: GET /passwords/: /passwords/: This might be interesting...
++ -3092: GET /people.list: /people.list: This might be interesting...
++ -3092: GET /perl5/: /perl5/: This might be interesting...
++ -3092: GET /php/: /php/: This might be interesting...
++ -3092: GET /phpMyAdmin/: /phpMyAdmin/: phpMyAdmin is for managing MySQL databases, and should be protected or limited to authorized hosts.
++ -3092: GET /pics/: /pics/: This might be interesting...
++ -3092: GET /piranha/secure/passwd.php3: /piranha/secure/passwd.php3: This might be interesting...
++ -3092: GET /pix/: /pix/: This might be interesting...
++ -3092: GET /poll: /poll: This might be interesting...
++ -3092: GET /polls: /polls: This might be interesting...
++ -3092: GET /porn/: /porn/: This might be interesting...
++ -3092: GET /pr0n/: /pr0n/: This might be interesting...
++ -3092: GET /privado/: /privado/: This might be interesting...
++ -3092: GET /private/: /private/: This might be interesting...
++ -3092: GET /prod/: /prod/: This might be interesting...
++ -3092: GET /pron/: /pron/: This might be interesting...
++ -3092: GET /prueba/: /prueba/: This might be interesting...
++ -3092: GET /pruebas/: /pruebas/: This might be interesting...
++ -3092: GET /pub/: /pub/: This might be interesting...
++ -3092: GET /public/: /public/: This might be interesting...
++ -3092: GET /publica/: /publica/: This might be interesting...
++ -3092: GET /publicar/: /publicar/: This might be interesting...
++ -3092: GET /publico/: /publico/: This might be interesting...
++ -3092: GET /purchase/: /purchase/: This might be interesting...
++ -3092: GET /purchases/: /purchases/: This might be interesting...
++ -3092: GET /pwd.db: /pwd.db: This might be interesting...
++ -3092: GET /python/: /python/: This might be interesting...
++ -3092: GET /perl/files.pl: /perl/files.pl: This might be interesting...
++ -3092: GET /perl5/files.pl: /perl5/files.pl: This might be interesting...
++ -3233: GET /cgi-dos/args.bat: /cgi-dos/args.bat: Default FrontPage CGI found.
++ -3092: GET /perweb.nsf: /perweb.nsf: This database can be read without authentication, which may reveal sensitive information.
++ -3092: GET /private.nsf: /private.nsf: This database can be read without authentication, which may reveal sensitive information.
++ -3092: GET /public.nsf: /public.nsf: This database can be read without authentication, which may reveal sensitive information.
++ -3093: GET /parse_xml.cgi: /parse_xml.cgi: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /php/gaestebuch/admin/index.php: /php/gaestebuch/admin/index.php: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /php/php4ts.dll: /php/php4ts.dll: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /pks/lookup: /pks/lookup: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /pm/lib.inc.php: /pm/lib.inc.php: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /poppassd.php3+: /poppassd.php3+: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /produccart/pdacmin/login.asp?|-|0|404_Object_Not_Found: /produccart/pdacmin/login.asp?|-|0|404_Object_Not_Found: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /productcart/database/EIPC.mdb: /productcart/database/EIPC.mdb: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /productcart/pc/Custva.asp?|-|0|404_Object_Not_Found: /productcart/pc/Custva.asp?|-|0|404_Object_Not_Found: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /product_info.php: /product_info.php: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /prometheus-all/index.php: /prometheus-all/index.php: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /protected/: /protected/: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /protected/secret.html+: /protected/secret.html+: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /protectedpage.php?uid=&#039;%20OR%20&#039;&#039;=&#039;&amp;pwd=&#039;%20OR%20&#039;&#039;=&#039;: /protectedpage.php?uid=&#039;%20OR%20&#039;&#039;=&#039;&amp;pwd=&#039;%20OR%20&#039;&#039;=&#039;: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /protection.php: /protection.php: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /pt_config.inc: /pt_config.inc: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /pvote/add.php?question=AmIgAy&amp;o1=yes&amp;o2=yeah&amp;o3=well..yeah&amp;o4=bad%20: /pvote/add.php?question=AmIgAy&amp;o1=yes&amp;o2=yeah&amp;o3=well..yeah&amp;o4=bad%20: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3093: GET /pvote/del.php?pollorder=1%20: /pvote/del.php?pollorder=1%20: This might be interesting... has been seen in web logs from an unknown scanner.
++ -3233: GET /php/index.php: /php/index.php: Monkey Http Daemon default PHP file found.
++ -3233: GET /cgi-bin/admin.pl: /cgi-bin/admin.pl: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/cfgwiz.exe: /cgi-bin/cfgwiz.exe: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/CGImail.exe: /cgi-bin/CGImail.exe: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/contents.htm: /cgi-bin/contents.htm: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/fpadmin.htm: /cgi-bin/fpadmin.htm: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/fpremadm.exe: /cgi-bin/fpremadm.exe: Default FrontPage CGI found.
++ -3233: GET /cgi-bin/fpsrvadm.exe: /cgi-bin/fpsrvadm.exe: Default FrontPage CGI found.
++ -3396: GET /php/mlog.html: /php/mlog.html: Remote file read vulnerability 1999-0346
++ -3396: GET /php/mlog.phtml: /php/mlog.phtml: Remote file read vulnerability 1999-0346
++ -3591: GET /project/index.php?m=projects&user_cookie=1: /project/index.php?m=projects&user_cookie=1: dotProject 0.2.1.5 may allow admin login bypass by adding the user_cookie=1 to the URL.
++ -6666: GET /cgi-bin/hpnst.exe?c=p+i=SrvSystemInfo.html: /cgi-bin/hpnst.exe?c=p+i=SrvSystemInfo.html: HP Instant TopTools GoAhead WebServer hpnst.exe may be vulnerable to a DoS.
++ -9624: GET /pass_done.php: /pass_done.php: PY-Membres 4.2 may allow users to execute a query which generates a list of usernames and passwords.
++ -3233: GET /ptg_upgrade_pkg.log: /ptg_upgrade_pkg.log: Oracle log files.
++ -3093: GET /pls/portal/owa_util.cellsprint?p_theQuery=select: /pls/portal/owa_util.cellsprint?p_theQuery=select: Direct access to Oracle packages could have an unkown impact.
++ -3093: GET /pls/portal/owa_util.listprint?p_theQuery=select: /pls/portal/owa_util.listprint?p_theQuery=select: Access to Oracle pages could have an unknown impact.
++ -3093: GET /pls/portal/owa_util.show_query_columns?ctable=sys.dba_users: /pls/portal/owa_util.show_query_columns?ctable=sys.dba_users: Access to Oracle pages could have an unknown impact.
++ -3093: GET /pls/portal/owa_util.showsource?cname=owa_util: /pls/portal/owa_util.showsource?cname=owa_util: Access to Oracle pages could have an unknown impact.
++ -3093: GET /pls/portal/owa_util.cellsprint?p_theQuery=select+*+from+sys.dba_users: /pls/portal/owa_util.cellsprint?p_theQuery=select+*+from+sys.dba_users: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/owa_util.signature: /pls/portal/owa_util.signature: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/HTP.PRINT: /pls/portal/HTP.PRINT: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/CXTSYS.DRILOAD.VALIDATE_STMT: /pls/portal/CXTSYS.DRILOAD.VALIDATE_STMT: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL_DEMO.ORG_CHART.SHOW: /pls/portal/PORTAL_DEMO.ORG_CHART.SHOW: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwv_form.genpopuplist: /pls/portal/PORTAL.wwv_form.genpopuplist: Access to Oracle pages cold have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwv_ui_lovf.show: /pls/portal/PORTAL.wwv_ui_lovf.show: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwa_app_module.link: /pls/portal/PORTAL.wwa_app_module.link: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwv_dynxml_generator.show: /pls/portal/PORTAL.wwv_dynxml_generator.show: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.home: /pls/portal/PORTAL.home: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwv_setting.render_css: /pls/portal/PORTAL.wwv_setting.render_css: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/PORTAL.wwv_main.render_warning_screen?p_oldurl=inTellectPRO&p_newurl=inTellectPRO: /pls/portal/PORTAL.wwv_main.render_warning_screen?p_oldurl=inTellectPRO&p_newurl=inTellectPRO: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/SELECT: /pls/portal/SELECT: Access to Oracle pages could have an unknown impact.					
++ -3093: GET /pls/portal/null: /pls/portal/null: Access to Oracle pages could have an unknown impact.					
++ GET /phone/: /phone/: This may be interesting...
++ -3092: GET /pf/: /pf/: This might be interesting... potential country code (French Polynesia)
++ -3092: GET /pk/: /pk/: This might be interesting... potential country code (Pakistan)
++ -3092: GET /pw/: /pw/: This might be interesting... potential country code (Palau)
++ -3092: GET /ps/: /ps/: This might be interesting... potential country code (Palestinian Territory)
++ -3092: GET /pa/: /pa/: This might be interesting... potential country code (Panama)
++ -3092: GET /pg/: /pg/: This might be interesting... potential country code (Papua New Guinea)
++ -3092: GET /py/: /py/: This might be interesting... potential country code (Paraguay)
++ -3092: GET /pe/: /pe/: This might be interesting... potential country code (Peru)
++ -3092: GET /ph/: /ph/: This might be interesting... potential country code (Philippines)
++ -3092: GET /pn/: /pn/: This might be interesting... potential country code (Pitcairn)
++ -3092: GET /pl/: /pl/: This might be interesting... potential country code (Poland)
++ -3092: GET /pt/: /pt/: This might be interesting... potential country code (Portugal)
++ -3092: GET /pr/: /pr/: This might be interesting... potential country code (Puerto Rico)
++ -3092: GET /pm/: /pm/: This might be interesting... potential country code (Saint Pierre And Miquelon)
++ GET /painel/: /painel/: Admin login page/section found.
++ GET /panel/: /panel/: Admin login page/section found.
++ GET /pgadmin/: /pgadmin/: Admin login page/section found.
++ GET /phpldapadmin/: /phpldapadmin/: Admin login page/section found.
++ GET /phppgadmin/: /phppgadmin/: Admin login page/section found.
++ GET /phpSQLiteAdmin/: /phpSQLiteAdmin/: Admin login page/section found.
++ GET /platz_login/: /platz_login/: Admin login page/section found.
++ GET /power_user/: /power_user/: Admin login page/section found.
++ GET /project-admins/: /project-admins/: Admin login page/section found.
++ GET /pureadmin/: /pureadmin/: Admin login page/section found.
++ GET /phpMyAdmin/: /phpMyAdmin/: phpMyAdmin directory found
++ GET /phpmyadmin/: /phpmyadmin/: phpMyAdmin directory found
++ GET /pma/: /pma/: phpMyAdmin directory found

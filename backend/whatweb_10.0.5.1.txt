@@ -1,0 +1,4 @@
+http://10.0.5.1 [200 OK] Country[RESERVED][ZZ], HTML5, IP[10.0.5.1], Meta-Refresh-Redirect[cgi-bin/luci/]
+https://10.0.5.1 [200 OK] Country[RESERVED][ZZ], HTML5, IP[10.0.5.1], Meta-Refresh-Redirect[cgi-bin/luci/]
+http://10.0.5.1/cgi-bin/luci/ [403 Forbidden] Country[RESERVED][ZZ], HTML5, IP[10.0.5.1], PasswordField[luci_password], Script, Title[Overview - Z690], UncommonHeaders[x-luci-login-required,x-content-type-options], X-Frame-Options[SAMEORIGIN], X-XSS-Protection[1; mode=block]
+https://10.0.5.1/cgi-bin/luci/ [403 Forbidden] Country[RESERVED][ZZ], HTML5, IP[10.0.5.1], PasswordField[luci_password], Script, Title[Overview - Z690], UncommonHeaders[x-luci-login-required,x-content-type-options], X-Frame-Options[SAMEORIGIN], X-XSS-Protection[1; mode=block]

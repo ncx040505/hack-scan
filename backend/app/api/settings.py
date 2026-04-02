@@ -1,0 +1,609 @@
+"""Settings API endpoints - LLM 和系统配置"""
+import uuid
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from loguru import logger
+
+from app.core.database import get_db
+from app.models.database import LLMConfig, SystemConfig, AIPersona
+from app.schemas.scan import (
+    LLMConfigCreate, LLMConfigUpdate, LLMConfigResponse, LLMConfigList,
+    SearchSettings, SystemSettings,
+    AIPersonaCreate, AIPersonaUpdate, AIPersonaResponse, AIPersonaList, AIPersonaBrief
+)
+
+router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+# ============ LLM 配置 ============
+
+@router.get("/llm", response_model=LLMConfigList)
+async def list_llm_configs(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有 LLM 配置"""
+    result = await db.execute(
+        select(LLMConfig).order_by(LLMConfig.priority.desc(), LLMConfig.created_at.desc())
+    )
+    configs = result.scalars().all()
+    
+    return LLMConfigList(
+        total=len(configs),
+        items=[
+            LLMConfigResponse(
+                id=c.id,
+                name=c.name,
+                provider=c.provider,
+                api_base_url=c.api_base_url,
+                has_api_key=bool(c.api_key),
+                model=c.model,
+                temperature=c.temperature,
+                max_tokens=c.max_tokens,
+                is_active=c.is_active,
+                is_enabled=c.is_enabled,
+                priority=c.priority,
+                total_requests=c.total_requests,
+                failed_requests=c.failed_requests,
+                last_used_at=c.last_used_at,
+                last_error=c.last_error,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+            )
+            for c in configs
+        ]
+    )
+
+
+@router.post("/llm", response_model=LLMConfigResponse)
+async def create_llm_config(
+    data: LLMConfigCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """创建 LLM 配置"""
+    config_id = str(uuid.uuid4())
+    
+    # 如果设置为 active，先取消其他 active 配置
+    if data.is_active:
+        await db.execute(
+            update(LLMConfig).values(is_active=False)
+        )
+    
+    config = LLMConfig(
+        id=config_id,
+        name=data.name,
+        provider=data.provider,
+        api_base_url=data.api_base_url,
+        api_key=data.api_key,
+        model=data.model,
+        temperature=data.temperature,
+        max_tokens=data.max_tokens,
+        is_active=data.is_active,
+        is_enabled=True,
+        priority=data.priority,
+    )
+    
+    db.add(config)
+    await db.commit()
+    await db.refresh(config)
+    
+    logger.info(f"LLM config created: {config.name}")
+    
+    return LLMConfigResponse(
+        id=config.id,
+        name=config.name,
+        provider=config.provider,
+        api_base_url=config.api_base_url,
+        has_api_key=bool(config.api_key),
+        model=config.model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        is_active=config.is_active,
+        is_enabled=config.is_enabled,
+        priority=config.priority,
+        total_requests=config.total_requests,
+        failed_requests=config.failed_requests,
+        last_used_at=config.last_used_at,
+        last_error=config.last_error,
+        created_at=config.created_at,
+        updated_at=config.updated_at,
+    )
+
+
+@router.patch("/llm/{config_id}", response_model=LLMConfigResponse)
+async def update_llm_config(
+    config_id: str,
+    data: LLMConfigUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新 LLM 配置"""
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    update_dict = data.model_dump(exclude_unset=True)
+    
+    # 如果设置为 active，先取消其他 active 配置
+    if update_dict.get('is_active'):
+        await db.execute(
+            update(LLMConfig).where(LLMConfig.id != config_id).values(is_active=False)
+        )
+    
+    for key, value in update_dict.items():
+        setattr(config, key, value)
+    
+    await db.commit()
+    await db.refresh(config)
+    
+    return LLMConfigResponse(
+        id=config.id,
+        name=config.name,
+        provider=config.provider,
+        api_base_url=config.api_base_url,
+        has_api_key=bool(config.api_key),
+        model=config.model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        is_active=config.is_active,
+        is_enabled=config.is_enabled,
+        priority=config.priority,
+        total_requests=config.total_requests,
+        failed_requests=config.failed_requests,
+        last_used_at=config.last_used_at,
+        last_error=config.last_error,
+        created_at=config.created_at,
+        updated_at=config.updated_at,
+    )
+
+
+@router.delete("/llm/{config_id}")
+async def delete_llm_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """删除 LLM 配置"""
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    await db.delete(config)
+    await db.commit()
+    
+    logger.info(f"LLM config deleted: {config.name}")
+    
+    return {"message": "配置已删除", "id": config_id}
+
+
+@router.post("/llm/{config_id}/activate")
+async def activate_llm_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """激活指定的 LLM 配置"""
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    # 取消所有其他配置的 active 状态
+    await db.execute(
+        update(LLMConfig).values(is_active=False)
+    )
+    
+    # 激活当前配置
+    config.is_active = True
+    await db.commit()
+    
+    return {"message": f"已激活配置: {config.name}", "id": config_id}
+
+
+@router.post("/llm/{config_id}/test")
+async def test_llm_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """测试 LLM 配置是否可用"""
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import HumanMessage
+        
+        llm = ChatOpenAI(
+            model=config.model,
+            temperature=config.temperature / 100,
+            api_key=config.api_key or None,
+            base_url=config.api_base_url or None,
+            max_tokens=100,
+            timeout=30,
+        )
+        
+        response = await llm.ainvoke([HumanMessage(content="Say 'test ok' in two words.")])
+        
+        return {
+            "success": True,
+            "message": "连接成功",
+            "response": response.content[:200]
+        }
+        
+    except Exception as e:
+        logger.error(f"LLM test failed: {e}")
+        return {
+            "success": False,
+            "message": "连接失败",
+            "error": str(e)
+        }
+
+
+# ============ 联网搜索配置 ============
+
+@router.get("/search", response_model=SearchSettings)
+async def get_search_settings(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取联网搜索设置"""
+    result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "search_settings")
+    )
+    config = result.scalar_one_or_none()
+    
+    if config and config.value:
+        try:
+            data = json.loads(config.value)
+            # 隐藏 API key
+            if data.get('api_key'):
+                data['api_key'] = '***'
+            return SearchSettings(**data)
+        except:
+            pass
+    
+    # 返回默认设置
+    return SearchSettings()
+
+
+@router.put("/search", response_model=SearchSettings)
+async def update_search_settings(
+    settings: SearchSettings,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新联网搜索设置"""
+    result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "search_settings")
+    )
+    config = result.scalar_one_or_none()
+    
+    # 如果是 *** 则保留原有的 key
+    if settings.api_key == '***' and config and config.value:
+        try:
+            old_data = json.loads(config.value)
+            settings.api_key = old_data.get('api_key')
+        except:
+            pass
+    
+    value = settings.model_dump_json()
+    
+    if config:
+        config.value = value
+    else:
+        config = SystemConfig(
+            key="search_settings",
+            value=value,
+            description="联网搜索配置"
+        )
+        db.add(config)
+    
+    await db.commit()
+    
+    logger.info(f"Search settings updated: provider={settings.provider}")
+    
+    # 隐藏返回的 API key
+    if settings.api_key:
+        settings.api_key = '***'
+    
+    return settings
+
+
+# ============ 获取活跃的 LLM 配置 ============
+
+async def get_active_llm_config(db: AsyncSession) -> LLMConfig | None:
+    """获取当前活跃的 LLM 配置"""
+    # 首先尝试获取 is_active=True 的配置
+    result = await db.execute(
+        select(LLMConfig).where(
+            LLMConfig.is_active == True,
+            LLMConfig.is_enabled == True
+        )
+    )
+    config = result.scalar_one_or_none()
+    
+    if config:
+        return config
+    
+    # 如果没有，按优先级和成功率选择
+    result = await db.execute(
+        select(LLMConfig).where(
+            LLMConfig.is_enabled == True
+        ).order_by(
+            LLMConfig.priority.desc(),
+            LLMConfig.failed_requests.asc(),
+            LLMConfig.created_at.asc()
+        ).limit(1)
+    )
+    
+    return result.scalar_one_or_none()
+
+
+async def get_search_settings_from_db(db: AsyncSession) -> SearchSettings:
+    """从数据库获取搜索设置"""
+    result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "search_settings")
+    )
+    config = result.scalar_one_or_none()
+    
+    if config and config.value:
+        try:
+            return SearchSettings(**json.loads(config.value))
+        except:
+            pass
+    
+    return SearchSettings()
+
+
+# ============ AI 人格配置 ============
+
+@router.get("/personas", response_model=AIPersonaList)
+async def list_personas(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有 AI 人格"""
+    result = await db.execute(
+        select(AIPersona).order_by(AIPersona.is_default.desc(), AIPersona.created_at.desc())
+    )
+    personas = result.scalars().all()
+    
+    return AIPersonaList(
+        total=len(personas),
+        items=[
+            AIPersonaResponse(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                system_prompt=p.system_prompt,
+                is_default=p.is_default,
+                is_enabled=p.is_enabled,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in personas
+        ]
+    )
+
+
+@router.get("/personas/brief", response_model=list[AIPersonaBrief])
+async def list_personas_brief(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有 AI 人格的简要信息（用于下拉选择）"""
+    result = await db.execute(
+        select(AIPersona)
+        .where(AIPersona.is_enabled == True)
+        .order_by(AIPersona.is_default.desc(), AIPersona.name.asc())
+    )
+    personas = result.scalars().all()
+    
+    return [
+        AIPersonaBrief(
+            id=p.id,
+            name=p.name,
+            description=p.description,
+            is_default=p.is_default,
+        )
+        for p in personas
+    ]
+
+
+@router.get("/personas/{persona_id}", response_model=AIPersonaResponse)
+async def get_persona(
+    persona_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取单个 AI 人格详情"""
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.id == persona_id)
+    )
+    persona = result.scalar_one_or_none()
+    
+    if not persona:
+        raise HTTPException(status_code=404, detail="人格不存在")
+    
+    return AIPersonaResponse(
+        id=persona.id,
+        name=persona.name,
+        description=persona.description,
+        system_prompt=persona.system_prompt,
+        is_default=persona.is_default,
+        is_enabled=persona.is_enabled,
+        created_at=persona.created_at,
+        updated_at=persona.updated_at,
+    )
+
+
+@router.post("/personas", response_model=AIPersonaResponse)
+async def create_persona(
+    data: AIPersonaCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """创建 AI 人格"""
+    persona_id = str(uuid.uuid4())
+    
+    # 如果设置为默认，先取消其他默认人格
+    if data.is_default:
+        await db.execute(
+            update(AIPersona).values(is_default=False)
+        )
+    
+    persona = AIPersona(
+        id=persona_id,
+        name=data.name,
+        description=data.description,
+        system_prompt=data.system_prompt,
+        is_default=data.is_default,
+        is_enabled=True,
+    )
+    
+    db.add(persona)
+    await db.commit()
+    await db.refresh(persona)
+    
+    logger.info(f"AI persona created: {persona.name}")
+    
+    return AIPersonaResponse(
+        id=persona.id,
+        name=persona.name,
+        description=persona.description,
+        system_prompt=persona.system_prompt,
+        is_default=persona.is_default,
+        is_enabled=persona.is_enabled,
+        created_at=persona.created_at,
+        updated_at=persona.updated_at,
+    )
+
+
+@router.patch("/personas/{persona_id}", response_model=AIPersonaResponse)
+async def update_persona(
+    persona_id: str,
+    data: AIPersonaUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新 AI 人格"""
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.id == persona_id)
+    )
+    persona = result.scalar_one_or_none()
+    
+    if not persona:
+        raise HTTPException(status_code=404, detail="人格不存在")
+    
+    update_dict = data.model_dump(exclude_unset=True)
+    
+    # 如果设置为默认，先取消其他默认人格
+    if update_dict.get('is_default'):
+        await db.execute(
+            update(AIPersona).where(AIPersona.id != persona_id).values(is_default=False)
+        )
+    
+    for key, value in update_dict.items():
+        setattr(persona, key, value)
+    
+    await db.commit()
+    await db.refresh(persona)
+    
+    logger.info(f"AI persona updated: {persona.name}")
+    
+    return AIPersonaResponse(
+        id=persona.id,
+        name=persona.name,
+        description=persona.description,
+        system_prompt=persona.system_prompt,
+        is_default=persona.is_default,
+        is_enabled=persona.is_enabled,
+        created_at=persona.created_at,
+        updated_at=persona.updated_at,
+    )
+
+
+@router.delete("/personas/{persona_id}")
+async def delete_persona(
+    persona_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """删除 AI 人格"""
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.id == persona_id)
+    )
+    persona = result.scalar_one_or_none()
+    
+    if not persona:
+        raise HTTPException(status_code=404, detail="人格不存在")
+    
+    if persona.is_default:
+        raise HTTPException(status_code=400, detail="不能删除默认人格，请先设置其他人格为默认")
+    
+    await db.delete(persona)
+    await db.commit()
+    
+    logger.info(f"AI persona deleted: {persona.name}")
+    
+    return {"message": "人格已删除", "id": persona_id}
+
+
+@router.post("/personas/{persona_id}/set-default")
+async def set_default_persona(
+    persona_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """设置默认 AI 人格"""
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.id == persona_id)
+    )
+    persona = result.scalar_one_or_none()
+    
+    if not persona:
+        raise HTTPException(status_code=404, detail="人格不存在")
+    
+    # 取消所有其他人格的默认状态
+    await db.execute(
+        update(AIPersona).values(is_default=False)
+    )
+    
+    # 设置当前人格为默认
+    persona.is_default = True
+    await db.commit()
+    
+    logger.info(f"AI persona set as default: {persona.name}")
+    
+    return {"message": f"已设置 {persona.name} 为默认人格", "id": persona_id}
+
+
+async def get_persona_by_id(db: AsyncSession, persona_id: str | None) -> AIPersona | None:
+    """获取指定 ID 的人格，若为空则获取默认人格"""
+    if persona_id:
+        result = await db.execute(
+            select(AIPersona).where(AIPersona.id == persona_id, AIPersona.is_enabled == True)
+        )
+        persona = result.scalar_one_or_none()
+        if persona:
+            return persona
+    
+    # 获取默认人格
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.is_default == True, AIPersona.is_enabled == True)
+    )
+    persona = result.scalar_one_or_none()
+    
+    if persona:
+        return persona
+    
+    # 如果没有默认人格，返回第一个启用的人格
+    result = await db.execute(
+        select(AIPersona).where(AIPersona.is_enabled == True).order_by(AIPersona.created_at.asc()).limit(1)
+    )
+    return result.scalar_one_or_none()

@@ -1,0 +1,760 @@
+"""Celery scan tasks"""
+import asyncio
+import uuid
+import json
+from datetime import datetime
+from loguru import logger
+from sqlalchemy import select
+
+from tasks.celery_app import celery_app
+from scanners import get_scanner, get_available_scanners
+from scanners.base import ScannerType, ScanFinding
+from llm.analyzer import get_analyzer
+from llm.agent import run_security_agent
+from app.core.database import create_celery_session
+from app.core.scan_logger import get_scan_logger, ScanLogger
+from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, MessageRole
+from app.core.config import get_settings
+
+celery_settings = get_settings()
+
+
+def run_async(coro):
+    """Helper to run async code in sync context"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+async def _fetch_agent_configs(session_factory) -> tuple[dict | None, dict | None]:
+    """预加载 Agent 所需的 LLM 和搜索配置，避免 Agent 内部访问数据库时的并发问题"""
+    from app.api.settings import get_active_llm_config, get_search_settings_from_db
+    
+    llm_config = None
+    search_config = None
+    
+    async with session_factory() as db:
+        # 加载 LLM 配置
+        db_config = await get_active_llm_config(db)
+        if db_config:
+            llm_config = {
+                'model': db_config.model,
+                'temperature': db_config.temperature / 100,
+                'api_key': db_config.api_key,
+                'base_url': db_config.api_base_url,
+                'max_tokens': db_config.max_tokens,
+            }
+        else:
+            llm_config = {
+                'model': celery_settings.llm_model,
+                'temperature': celery_settings.llm_temperature,
+                'api_key': celery_settings.openai_api_key,
+                'base_url': celery_settings.openai_base_url,
+            }
+        
+        # 加载搜索配置
+        search_settings = await get_search_settings_from_db(db)
+        search_config = {
+            'enabled': search_settings.enabled,
+            'provider': search_settings.provider,
+            'api_key': search_settings.api_key,
+            'max_results': search_settings.max_results,
+        }
+    
+    return llm_config, search_config
+
+
+async def _update_scan_status(
+    session_factory,
+    scan_task_id: str,
+    status: ScanStatus,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    llm_summary: str | None = None,
+    risk_score: int | None = None,
+):
+    """更新扫描任务状态与汇总字段"""
+    async with session_factory() as session:
+        result = await session.execute(
+            select(ScanTask).where(ScanTask.id == scan_task_id)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            logger.error(f"Scan task not found for status update: {scan_task_id}")
+            return
+
+        task.status = status
+        if started_at is not None:
+            task.started_at = started_at
+        if completed_at is not None:
+            task.completed_at = completed_at
+        if llm_summary is not None:
+            task.llm_summary = llm_summary
+        if risk_score is not None:
+            task.llm_risk_score = risk_score
+
+        await session.commit()
+
+
+async def _save_findings(session_factory, scan_task_id: str, findings: list[ScanFinding]):
+    """将扫描发现写入漏洞表"""
+    if not findings:
+        return
+
+    severity_map = {
+        "critical": SeverityLevel.CRITICAL,
+        "high": SeverityLevel.HIGH,
+        "medium": SeverityLevel.MEDIUM,
+        "low": SeverityLevel.LOW,
+        "info": SeverityLevel.INFO,
+    }
+
+    async with session_factory() as session:
+        for finding in findings:
+            vuln = Vulnerability(
+                id=str(uuid.uuid4()),
+                scan_task_id=scan_task_id,
+                name=finding.name,
+                severity=severity_map.get(finding.severity.lower(), SeverityLevel.INFO),
+                category=finding.category,
+                description=finding.description,
+                evidence=(finding.evidence[:4000] if finding.evidence else None),
+                location=finding.location,
+            )
+            session.add(vuln)
+
+        await session.commit()
+
+
+async def _save_agent_pause(
+    session_factory,
+    scan_task_id: str,
+    question: str,
+    context: str = None,
+    options: list = None,
+    agent_state: dict = None,
+    scan_context: dict = None,
+    findings: list = None,
+):
+    """保存 Agent 暂停状态"""
+    async with session_factory() as session:
+        # 构造完整的消息内容
+        content_parts = [question]
+        if context:
+            content_parts.insert(0, f"**背景:** {context}\n")
+        if options:
+            content_parts.append("\n**可选项:**\n" + "\n".join([f"  • {opt}" for opt in options]))
+        
+        message = ScanMessage(
+            id=str(uuid.uuid4()),
+            scan_task_id=scan_task_id,
+            role=MessageRole.AGENT,
+            content="\n".join(content_parts),
+            agent_state={
+                "agent_state": agent_state,
+                "scan_context": scan_context,
+                "findings": [
+                    {
+                        "name": f.name,
+                        "severity": f.severity,
+                        "category": f.category,
+                        "location": f.location,
+                        "description": f.description,
+                        "evidence": f.evidence[:1000] if f.evidence else None,
+                    }
+                    for f in (findings or [])
+                ],
+                "options": options,
+            },
+            is_processed=False,
+        )
+        session.add(message)
+        await session.commit()
+
+
+async def _get_pending_user_reply(session_factory, scan_task_id: str) -> tuple:
+    """获取待处理的用户回复和 agent 状态"""
+    async with session_factory() as session:
+        # 获取最新的未处理用户消息
+        result = await session.execute(
+            select(ScanMessage)
+            .where(ScanMessage.scan_task_id == scan_task_id)
+            .where(ScanMessage.role == MessageRole.USER)
+            .where(ScanMessage.is_processed == False)
+            .order_by(ScanMessage.created_at.desc())
+            .limit(1)
+        )
+        user_msg = result.scalar_one_or_none()
+        
+        if not user_msg:
+            return None, None, None, None
+        
+        # 获取最新的 agent 消息（包含 agent_state）
+        result = await session.execute(
+            select(ScanMessage)
+            .where(ScanMessage.scan_task_id == scan_task_id)
+            .where(ScanMessage.role == MessageRole.AGENT)
+            .where(ScanMessage.agent_state.isnot(None))
+            .order_by(ScanMessage.created_at.desc())
+            .limit(1)
+        )
+        agent_msg = result.scalar_one_or_none()
+        
+        if not agent_msg or not agent_msg.agent_state:
+            return None, None, None, None
+        
+        # 标记用户消息为已处理
+        user_msg.is_processed = True
+        await session.commit()
+        
+        state_data = agent_msg.agent_state
+        return (
+            user_msg.content,
+            state_data.get("agent_state"),
+            state_data.get("scan_context"),
+            state_data.get("findings", [])
+        )
+
+
+@celery_app.task(bind=True, name="tasks.execute_scan")
+def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: dict):
+    """执行完整扫描流程"""
+    logger.info(f"Starting scan task {scan_task_id} for target: {target}")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # Create session factory for this event loop
+    engine, session_factory = create_celery_session()
+    
+    # Initialize scan logger
+    scan_logger = get_scan_logger(scan_task_id)
+    scan_logger.info("🚀 扫描任务启动", f"目标: {target}, 类型: {scan_type}")
+
+    loop.run_until_complete(_update_scan_status(
+        session_factory=session_factory,
+        scan_task_id=scan_task_id,
+        status=ScanStatus.RUNNING,
+        started_at=datetime.utcnow(),
+    ))
+    
+    self.update_state(state="RUNNING", meta={"phase": "initializing"})
+    scan_logger.info("⚙️ 初始化扫描环境")
+    
+    findings = []
+    errors = []
+    
+    async def run_scanners():
+        nonlocal findings, errors
+        
+        # 确定要运行的扫描器
+        available = await get_available_scanners()
+        scan_logger.info("🔍 检测可用扫描器", f"可用: {[s.value for s in available]}")
+        
+        scanners_to_run = []
+        if config.get("enable_port_scan", True) and ScannerType.NMAP in available:
+            scanners_to_run.append(ScannerType.NMAP)
+        if config.get("enable_nuclei", True) and ScannerType.NUCLEI in available:
+            scanners_to_run.append(ScannerType.NUCLEI)
+        
+        if not scanners_to_run:
+            scan_logger.error("❌ 没有可用的扫描器")
+            errors.append("No scanners available")
+            return
+        
+        scan_logger.info("📋 扫描计划", f"将运行: {[s.value for s in scanners_to_run]}")
+        
+        # 逐个运行扫描器
+        for scanner_type in scanners_to_run:
+            self.update_state(
+                state="RUNNING",
+                meta={"phase": f"running_{scanner_type.value}"}
+            )
+            
+            tool_name = scanner_type.value.upper()
+            scan_logger.tool(tool_name, f"🔧 启动 {tool_name} 扫描器")
+            
+            try:
+                scanner = get_scanner(scanner_type)
+                finding_count = 0
+                async for finding in scanner.scan(target, config):
+                    findings.append(finding)
+                    finding_count += 1
+                    # 记录每个发现
+                    scan_logger.tool(
+                        tool_name, 
+                        f"📍 发现: {finding.name}",
+                        f"严重性: {finding.severity}\n位置: {finding.location or 'N/A'}\n{finding.description or ''}"
+                    )
+                    logger.debug(f"Found: {finding.name} ({finding.severity})")
+                
+                scan_logger.success(f"✅ {tool_name} 扫描完成", f"发现 {finding_count} 个结果")
+                
+            except Exception as e:
+                logger.error(f"Scanner {scanner_type} error: {e}")
+                scan_logger.error(f"❌ {tool_name} 扫描出错", str(e))
+                errors.append(f"{scanner_type}: {str(e)}")
+    
+    llm_summary = None
+    risk_score = None
+
+    try:
+        # 执行扫描
+        loop.run_until_complete(run_scanners())
+
+        # LLM 分析
+        self.update_state(state="RUNNING", meta={"phase": "llm_analysis"})
+        
+        # 构建初始扫描上下文
+        scan_context = {
+            "target": target,
+            "scan_type": scan_type,
+            "findings_count": len(findings),
+            "findings": [
+                {
+                    "name": f.name,
+                    "severity": f.severity,
+                    "location": f.location,
+                    "category": f.category,
+                    "description": f.description,
+                }
+                for f in findings[:50]  # 限制数量避免 token 过多
+            ],
+            "errors": errors,
+        }
+        
+        # AI Agent 自主安全测试阶段
+        if config.get("enable_ai_agent", True):
+            self.update_state(state="RUNNING", meta={"phase": "ai_agent"})
+            
+            # 获取自定义提示词
+            custom_prompt = config.get("ai_custom_prompt")
+            max_iterations = config.get("ai_max_iterations", 0)  # 0 表示无限制
+            
+            if custom_prompt:
+                scan_logger.llm("🤖 启动 AI 安全测试代理", f"AI 将按照用户指示执行测试...\n\n用户提示: {custom_prompt}")
+            else:
+                scan_logger.llm("🤖 启动 AI 安全测试代理", "AI 将自主决定并执行额外的安全测试...")
+            
+            try:
+                # 创建日志回调
+                async def agent_log_callback(log_type: str, message: str, details: str = None, tool: str = None):
+                    if log_type == "llm":
+                        scan_logger.llm(message, details)
+                    elif log_type == "tool":
+                        scan_logger.tool(tool or "agent", message, details)
+                    elif log_type == "output":
+                        scan_logger.output(tool or "agent", message, details)
+                    elif log_type == "error":
+                        scan_logger.error(message, details)
+                    elif log_type == "success":
+                        scan_logger.success(message, details)
+                    else:
+                        scan_logger.info(message, details)
+                
+                # 预加载 Agent 所需的配置，避免 Agent 内部并发访问数据库
+                llm_config, search_config = loop.run_until_complete(
+                    _fetch_agent_configs(session_factory)
+                )
+                
+                # 运行 AI Agent
+                agent_result = loop.run_until_complete(run_security_agent(
+                    target=target,
+                    scan_context=scan_context,
+                    log_callback=agent_log_callback,
+                    max_iterations=max_iterations,
+                    custom_prompt=custom_prompt,
+                    session_factory=session_factory,
+                    llm_config=llm_config,
+                    search_config=search_config
+                ))
+                
+                # 检查 Agent 是否暂停等待用户输入
+                if agent_result.get("paused"):
+                    scan_logger.info("⏸️ AI Agent 暂停", f"等待用户回复: {agent_result.get('question')}")
+                    
+                    # 保存暂停状态到数据库
+                    loop.run_until_complete(_save_agent_pause(
+                        session_factory=session_factory,
+                        scan_task_id=scan_task_id,
+                        question=agent_result.get("question"),
+                        context=agent_result.get("context"),
+                        options=agent_result.get("options"),
+                        agent_state=agent_result.get("agent_state"),
+                        scan_context=scan_context,
+                        findings=findings
+                    ))
+                    
+                    # 更新扫描状态为 paused
+                    loop.run_until_complete(_update_scan_status(
+                        session_factory=session_factory,
+                        scan_task_id=scan_task_id,
+                        status=ScanStatus.PAUSED,
+                    ))
+                    
+                    scan_logger.close()
+                    loop.run_until_complete(engine.dispose())
+                    asyncio.set_event_loop(None)
+                    loop.close()
+                    
+                    return {
+                        "scan_task_id": scan_task_id,
+                        "status": "paused",
+                        "question": agent_result.get("question"),
+                        "context": agent_result.get("context"),
+                        "options": agent_result.get("options"),
+                    }
+                
+                # 添加 Agent 发现到 findings
+                if agent_result.get("findings"):
+                    scan_logger.success(
+                        f"🎯 AI Agent 发现 {len(agent_result['findings'])} 个问题",
+                        json.dumps(agent_result["findings"], ensure_ascii=False, indent=2)
+                    )
+                
+                # Agent 的最终总结将用于 LLM summary
+                if agent_result.get("summary"):
+                    scan_context["agent_summary"] = agent_result["summary"]
+                    scan_context["agent_tools_used"] = agent_result.get("tools_used", [])
+                    scan_context["agent_iterations"] = agent_result.get("iterations", 0)
+                
+            except Exception as e:
+                logger.error(f"AI Agent failed: {e}")
+                scan_logger.error("❌ AI Agent 执行失败", str(e))
+                errors.append(f"AI Agent: {str(e)}")
+        
+        # LLM 总结分析
+        if findings or scan_context.get("agent_summary"):
+            scan_logger.llm("🤖 AI 开始生成扫描报告", f"综合 {len(findings)} 个发现和 AI Agent 测试结果")
+            
+            try:
+                analyzer = get_analyzer()
+                vuln_dicts = [
+                    {
+                        "name": f.name,
+                        "severity": f.severity,
+                        "location": f.location,
+                        "category": f.category,
+                    }
+                    for f in findings
+                ]
+                
+                # 添加 Agent 测试信息到扫描信息
+                scan_info = {
+                    "scan_type": scan_type,
+                    "duration": "N/A",
+                }
+                if scan_context.get("agent_summary"):
+                    scan_info["ai_agent_summary"] = scan_context["agent_summary"]
+                    scan_info["ai_agent_tools"] = scan_context.get("agent_tools_used", [])
+                
+                scan_logger.llm("📤 发送数据到 AI 模型", f"分析 {len(vuln_dicts)} 个漏洞发现...")
+
+                result = loop.run_until_complete(analyzer.summarize_scan(
+                    target=target,
+                    vulnerabilities=vuln_dicts,
+                    scan_info=scan_info
+                ))
+
+                llm_summary = result.executive_summary
+                risk_score = result.risk_score
+                
+                # 如果有 Agent 总结，合并到 llm_summary
+                if scan_context.get("agent_summary"):
+                    llm_summary = f"{llm_summary}\n\n**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
+                
+                scan_logger.llm(
+                    "📥 AI 分析完成", 
+                    f"风险评分: {risk_score}/100\n\n{llm_summary}"
+                )
+                
+                if result.critical_findings:
+                    scan_logger.llm("⚠️ 关键发现", "\n".join(f"• {f}" for f in result.critical_findings))
+                
+                if result.priority_recommendations:
+                    scan_logger.llm("💡 修复建议", "\n".join(f"• {r}" for r in result.priority_recommendations))
+
+            except Exception as e:
+                logger.error(f"LLM analysis failed: {e}")
+                scan_logger.error("❌ AI 分析失败", str(e))
+                errors.append(f"LLM analysis: {str(e)}")
+                
+                # 如果 LLM 分析失败但有 Agent 总结，使用 Agent 总结
+                if scan_context.get("agent_summary"):
+                    llm_summary = f"**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
+        else:
+            scan_logger.info("ℹ️ 未发现漏洞，跳过 AI 分析")
+
+        loop.run_until_complete(_save_findings(
+            session_factory=session_factory,
+            scan_task_id=scan_task_id,
+            findings=findings
+        ))
+        
+        loop.run_until_complete(_update_scan_status(
+            session_factory=session_factory,
+            scan_task_id=scan_task_id,
+            status=ScanStatus.COMPLETED,
+            completed_at=datetime.utcnow(),
+            llm_summary=llm_summary,
+            risk_score=risk_score,
+        ))
+        
+        scan_logger.success(
+            "🎉 扫描任务完成", 
+            f"共发现 {len(findings)} 个结果" + (f"，风险评分 {risk_score}/100" if risk_score else "")
+        )
+        
+    except Exception as e:
+        logger.exception(f"Scan task failed for {scan_task_id}: {e}")
+        scan_logger.error("💥 扫描任务失败", str(e))
+        try:
+            loop.run_until_complete(_update_scan_status(
+                session_factory=session_factory,
+                scan_task_id=scan_task_id,
+                status=ScanStatus.FAILED,
+                completed_at=datetime.utcnow(),
+            ))
+        except Exception as status_error:
+            logger.error(f"Failed to mark task {scan_task_id} as failed: {status_error}")
+        raise
+    finally:
+        scan_logger.close()
+        loop.run_until_complete(engine.dispose())
+        asyncio.set_event_loop(None)
+        loop.close()
+
+    # 返回结果
+    return {
+        "scan_task_id": scan_task_id,
+        "findings_count": len(findings),
+        "findings": [
+            {
+                "id": str(uuid.uuid4()),
+                "name": f.name,
+                "severity": f.severity,
+                "category": f.category,
+                "description": f.description,
+                "location": f.location,
+                "evidence": f.evidence[:1000] if f.evidence else None,
+                "raw_data": f.raw_data,
+            }
+            for f in findings
+        ],
+        "llm_summary": llm_summary,
+        "risk_score": risk_score,
+        "errors": errors,
+    }
+
+
+@celery_app.task(name="tasks.analyze_vulnerability")
+def analyze_vulnerability(vuln_id: str, name: str, category: str, evidence: str, context: str = ""):
+    """单独分析一个漏洞"""
+    async def analyze():
+        analyzer = get_analyzer()
+        return await analyzer.analyze_vulnerability(
+            vuln_name=name,
+            vuln_type=category,
+            evidence=evidence,
+            context=context
+        )
+    
+    try:
+        result = run_async(analyze())
+        return {
+            "vuln_id": vuln_id,
+            "summary": result.summary,
+            "severity_assessment": result.severity_assessment,
+            "exploitation_difficulty": result.exploitation_difficulty,
+            "business_impact": result.business_impact,
+            "remediation_steps": result.remediation_steps,
+            "false_positive_likelihood": result.false_positive_likelihood,
+        }
+    except Exception as e:
+        logger.error(f"Vulnerability analysis failed: {e}")
+        return {"vuln_id": vuln_id, "error": str(e)}
+
+
+@celery_app.task(bind=True, name="tasks.resume_scan")
+def resume_scan(self, scan_task_id: str):
+    """恢复暂停的扫描任务"""
+    logger.info(f"Resuming scan task {scan_task_id}")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    engine, session_factory = create_celery_session()
+    scan_logger = get_scan_logger(scan_task_id)
+    
+    try:
+        # 获取用户回复和 agent 状态
+        user_reply, agent_state, scan_context, saved_findings = loop.run_until_complete(
+            _get_pending_user_reply(session_factory, scan_task_id)
+        )
+        
+        if not user_reply or not agent_state:
+            logger.error(f"No pending user reply found for scan {scan_task_id}")
+            return {"error": "No pending user reply found"}
+        
+        # 获取扫描任务信息
+        async def get_scan_task():
+            async with session_factory() as session:
+                result = await session.execute(
+                    select(ScanTask).where(ScanTask.id == scan_task_id)
+                )
+                return result.scalar_one_or_none()
+        
+        scan_task = loop.run_until_complete(get_scan_task())
+        if not scan_task:
+            logger.error(f"Scan task not found: {scan_task_id}")
+            return {"error": "Scan task not found"}
+        
+        target = scan_task.target
+        config = scan_task.config or {}
+        
+        # 更新状态为 running
+        loop.run_until_complete(_update_scan_status(
+            session_factory=session_factory,
+            scan_task_id=scan_task_id,
+            status=ScanStatus.RUNNING,
+        ))
+        
+        scan_logger.info("▶️ 扫描恢复", f"用户回复: {user_reply[:100]}...")
+        self.update_state(state="RUNNING", meta={"phase": "ai_agent_resumed"})
+        
+        # 创建日志回调
+        async def agent_log_callback(log_type: str, message: str, details: str = None, tool: str = None):
+            if log_type == "llm":
+                scan_logger.llm(message, details)
+            elif log_type == "tool":
+                scan_logger.tool(tool or "agent", message, details)
+            elif log_type == "output":
+                scan_logger.output(tool or "agent", message, details)
+            elif log_type == "error":
+                scan_logger.error(message, details)
+            elif log_type == "success":
+                scan_logger.success(message, details)
+            else:
+                scan_logger.info(message, details)
+        
+        # 恢复 AI Agent
+        custom_prompt = config.get("ai_custom_prompt")
+        max_iterations = config.get("ai_max_iterations", 0)
+        
+        # 预加载 Agent 所需的配置
+        llm_config, search_config = loop.run_until_complete(
+            _fetch_agent_configs(session_factory)
+        )
+        
+        agent_result = loop.run_until_complete(run_security_agent(
+            target=target,
+            scan_context=scan_context,
+            log_callback=agent_log_callback,
+            max_iterations=max_iterations,
+            custom_prompt=custom_prompt,
+            restored_state=agent_state,
+            user_reply=user_reply,
+            session_factory=session_factory,
+            llm_config=llm_config,
+            search_config=search_config
+        ))
+        
+        # 检查是否再次暂停
+        if agent_result.get("paused"):
+            scan_logger.info("⏸️ AI Agent 再次暂停", f"等待用户回复: {agent_result.get('question')}")
+            
+            loop.run_until_complete(_save_agent_pause(
+                session_factory=session_factory,
+                scan_task_id=scan_task_id,
+                question=agent_result.get("question"),
+                context=agent_result.get("context"),
+                options=agent_result.get("options"),
+                agent_state=agent_result.get("agent_state"),
+                scan_context=scan_context,
+                findings=[]  # TODO: 从 saved_findings 恢复
+            ))
+            
+            loop.run_until_complete(_update_scan_status(
+                session_factory=session_factory,
+                scan_task_id=scan_task_id,
+                status=ScanStatus.PAUSED,
+            ))
+            
+            return {
+                "scan_task_id": scan_task_id,
+                "status": "paused",
+                "question": agent_result.get("question"),
+            }
+        
+        # Agent 完成，继续 LLM 总结
+        llm_summary = None
+        risk_score = None
+        
+        if agent_result.get("summary"):
+            scan_context["agent_summary"] = agent_result["summary"]
+            scan_context["agent_tools_used"] = agent_result.get("tools_used", [])
+            scan_context["agent_iterations"] = agent_result.get("iterations", 0)
+        
+        # LLM 总结
+        if scan_context.get("agent_summary"):
+            scan_logger.llm("🤖 AI 开始生成扫描报告", "综合 AI Agent 测试结果")
+            
+            try:
+                analyzer = get_analyzer()
+                scan_info = {
+                    "scan_type": scan_task.scan_type,
+                    "duration": "N/A",
+                    "ai_agent_summary": scan_context.get("agent_summary"),
+                    "ai_agent_tools": scan_context.get("agent_tools_used", []),
+                }
+                
+                result = loop.run_until_complete(analyzer.summarize_scan(
+                    target=target,
+                    vulnerabilities=[],
+                    scan_info=scan_info
+                ))
+                
+                llm_summary = f"{result.executive_summary}\n\n**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
+                risk_score = result.risk_score
+                
+                scan_logger.llm("📥 AI 分析完成", f"风险评分: {risk_score}/100")
+                
+            except Exception as e:
+                logger.error(f"LLM analysis failed: {e}")
+                llm_summary = f"**AI Agent 测试总结:**\n{scan_context.get('agent_summary', 'N/A')}"
+        
+        # 更新扫描状态为完成
+        loop.run_until_complete(_update_scan_status(
+            session_factory=session_factory,
+            scan_task_id=scan_task_id,
+            status=ScanStatus.COMPLETED,
+            completed_at=datetime.utcnow(),
+            llm_summary=llm_summary,
+            risk_score=risk_score,
+        ))
+        
+        scan_logger.success("🎉 扫描任务完成", f"风险评分: {risk_score}/100" if risk_score else "")
+        
+        return {
+            "scan_task_id": scan_task_id,
+            "status": "completed",
+            "llm_summary": llm_summary,
+            "risk_score": risk_score,
+        }
+        
+    except Exception as e:
+        logger.exception(f"Resume scan failed for {scan_task_id}: {e}")
+        scan_logger.error("💥 恢复扫描失败", str(e))
+        loop.run_until_complete(_update_scan_status(
+            session_factory=session_factory,
+            scan_task_id=scan_task_id,
+            status=ScanStatus.FAILED,
+            completed_at=datetime.utcnow(),
+        ))
+        raise
+    finally:
+        scan_logger.close()
+        loop.run_until_complete(engine.dispose())
+        asyncio.set_event_loop(None)
+        loop.close()

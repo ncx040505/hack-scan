@@ -1,0 +1,55 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ARG NUCLEI_VERSION=3.7.1
+
+# Install system dependencies including scanning tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # 基础工具
+    nmap \
+    curl \
+    unzip \
+    p7zip-full \
+    wget \
+    # 安全扫描工具
+    dirb \
+    sqlmap \
+    sslscan \
+    masscan \
+    hydra \
+    # 网络工具
+    netcat-openbsd \
+    socat \
+    dnsutils \
+    whois \
+    traceroute \
+    tcpdump \
+    && rm -rf /var/lib/apt/lists/* \
+    # 创建数据目录
+    && mkdir -p /app/data
+
+# Install Nuclei
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+        amd64) nuclei_arch="amd64" ;; \
+        arm64) nuclei_arch="arm64" ;; \
+        *) echo "Unsupported architecture: $arch"; exit 1 ;; \
+    esac; \
+    curl -fL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${nuclei_arch}.zip"; \
+    unzip -q /tmp/nuclei.zip -d /tmp/nuclei; \
+    install -m 0755 /tmp/nuclei/nuclei /usr/local/bin/nuclei; \
+    rm -rf /tmp/nuclei /tmp/nuclei.zip
+
+# Mark tools as pre-installed
+RUN mkdir -p /app/data && touch /app/data/.tools_initialized
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--forwarded-allow-ips", "*"]

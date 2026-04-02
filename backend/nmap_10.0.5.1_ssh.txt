@@ -1,0 +1,29 @@
+# Nmap 7.95 scan initiated Wed Apr  1 05:50:40 2026 as: nmap -p 22 --script ssh2-enum-algos,ssh-hostkey -oN nmap_10.0.5.1_ssh.txt 10.0.5.1
+Nmap scan report for 10.0.5.1
+Host is up (0.00048s latency).
+
+PORT   STATE SERVICE
+22/tcp open  ssh
+| ssh2-enum-algos: 
+|   kex_algorithms: (7)
+|       sntrup761x25519-sha512
+|       sntrup761x25519-sha512@openssh.com
+|       curve25519-sha256
+|       curve25519-sha256@libssh.org
+|       diffie-hellman-group14-sha256
+|       kexguess2@matt.ucc.asn.au
+|       kex-strict-s-v00@openssh.com
+|   server_host_key_algorithms: (3)
+|       ssh-ed25519
+|       ecdsa-sha2-nistp256
+|       rsa-sha2-256
+|   encryption_algorithms: (3)
+|       chacha20-poly1305@openssh.com
+|       aes256-ctr
+|       aes128-ctr
+|   mac_algorithms: (1)
+|       hmac-sha2-256
+|   compression_algorithms: (1)
+|_      none
+
+# Nmap done at Wed Apr  1 05:50:41 2026 -- 1 IP address (1 host up) scanned in 0.43 seconds

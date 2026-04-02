@@ -1,0 +1,8 @@
+# Nmap 7.95 scan initiated Wed Apr  1 03:08:34 2026 as: nmap -p 5001 --script http-headers,http-title,http-methods --script-args http.useragent='Mozilla/5.0' -oN nmap_http_5001_more.txt 10.0.5.210
+Nmap scan report for 10.0.5.210
+Host is up (0.00027s latency).
+
+PORT     STATE SERVICE
+5001/tcp open  commplex-link
+
+# Nmap done at Wed Apr  1 03:08:34 2026 -- 1 IP address (1 host up) scanned in 0.34 seconds

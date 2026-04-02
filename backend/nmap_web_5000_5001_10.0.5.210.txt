@@ -1,0 +1,38 @@
+# Nmap 7.95 scan initiated Wed Apr  1 11:17:22 2026 as: nmap -Pn -p 5000,5001 -sV -sC --script http-title,http-headers,http-server-header -oN nmap_web_5000_5001_10.0.5.210.txt 10.0.5.210
+Nmap scan report for 10.0.5.210
+Host is up (0.00026s latency).
+
+PORT     STATE SERVICE  VERSION
+5000/tcp open  http     nginx
+| http-headers: 
+|   Server: nginx
+|   Date: Wed, 01 Apr 2026 11:17:42 GMT
+|   Content-Type: text/html
+|   Content-Length: 2173
+|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
+|   Connection: close
+|   Vary: Accept-Encoding
+|   ETag: "69c8d9a9-87d"
+|   cache-control: no-store
+|   Accept-Ranges: bytes
+|   
+|_  (Request type: HEAD)
+|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
+5001/tcp open  ssl/http nginx
+|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
+| http-headers: 
+|   Server: nginx
+|   Date: Wed, 01 Apr 2026 11:17:42 GMT
+|   Content-Type: text/html
+|   Content-Length: 2173
+|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
+|   Connection: close
+|   Vary: Accept-Encoding
+|   ETag: "69c8d9a9-87d"
+|   cache-control: no-store
+|   Accept-Ranges: bytes
+|   
+|_  (Request type: HEAD)
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Wed Apr  1 11:17:42 2026 -- 1 IP address (1 host up) scanned in 19.36 seconds

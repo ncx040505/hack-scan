@@ -1,0 +1,167 @@
+# Nmap 7.95 scan initiated Wed Apr  1 05:14:53 2026 as: nmap -p- -T4 --min-rate 1000 -sV --version-light --open -oN nmap_alltcp_10.0.5.210.txt 10.0.5.210
+Nmap scan report for 10.0.5.210
+Host is up (0.00018s latency).
+Not shown: 65498 closed tcp ports (reset)
+PORT      STATE SERVICE        VERSION
+22/tcp    open  ssh            OpenSSH 9.2p1 Debian 2+deb12u6 (protocol 2.0)
+80/tcp    open  http           nginx
+111/tcp   open  rpcbind
+139/tcp   open  netbios-ssn    Samba smbd 4
+443/tcp   open  ssl/http       nginx
+445/tcp   open  netbios-ssn    Samba smbd 4
+3000/tcp  open  http           nginx
+3702/tcp  open  tcpwrapped
+5000/tcp  open  http           nginx
+5001/tcp  open  ssl/http       nginx
+5005/tcp  open  http           Golang net/http server
+5006/tcp  open  ssl/http       Golang net/http server
+5700/tcp  open  supportassist?
+6099/tcp  open  http           Node.js Express framework
+6185/tcp  open  unknown
+6186/tcp  open  http           aiohttp 3.13.3 (Python 3.12)
+8000/tcp  open  http           nginx
+8001/tcp  open  ssl/http       nginx
+8005/tcp  open  http           Golang net/http server
+8123/tcp  open  http           aiohttp 3.13.3 (Python 3.14)
+8156/tcp  open  http           Uvicorn
+8157/tcp  open  http           nginx 1.26.3
+8418/tcp  open  http           Golang net/http server
+9645/tcp  open  http           Uvicorn
+10809/tcp open  nbd?
+12712/tcp open  http           Golang net/http server
+15244/tcp open  http           Golang net/http server
+16000/tcp open  fmsas?
+18555/tcp open  unknown
+20365/tcp open  http           Golang net/http server
+26000/tcp open  quake?
+33715/tcp open  tcpwrapped
+37901/tcp open  unknown
+44535/tcp open  http           aiohttp 3.13.3 (Python 3.14)
+49152/tcp open  upnp           Portable SDK for UPnP devices 1.8.4 (Linux 6.12.18-trim; UPnP 1.0)
+49153/tcp open  unknown
+56757/tcp open  tcpwrapped
+7 services unrecognized despite returning data. If you know the service/version, please submit the following fingerprints at https://nmap.org/cgi-bin/submit.cgi?new-service :
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port5700-TCP:V=7.95%I=2%D=4/1%Time=69CCA9D9%P=x86_64-pc-linux-gnu%r(Get
+SF:Request,4E0,"HTTP/1\.1\x20200\x20OK\r\nCross-Origin-Opener-Policy:\x20s
+SF:ame-origin\r\nCross-Origin-Resource-Policy:\x20same-origin\r\nOrigin-Ag
+SF:ent-Cluster:\x20\?1\r\nReferrer-Policy:\x20no-referrer\r\nStrict-Transp
+SF:ort-Security:\x20max-age=31536000;\x20includeSubDomains\r\nX-Content-Ty
+SF:pe-Options:\x20nosniff\r\nX-DNS-Prefetch-Control:\x20off\r\nX-Download-
+SF:Options:\x20noopen\r\nX-Frame-Options:\x20SAMEORIGIN\r\nX-Permitted-Cro
+SF:ss-Domain-Policies:\x20none\r\nX-XSS-Protection:\x200\r\nVary:\x20Origi
+SF:n,\x20Accept-Encoding\r\nAccess-Control-Allow-Origin:\x20\*\r\nAccept-R
+SF:anges:\x20bytes\r\nCache-Control:\x20public,\x20max-age=0\r\nLast-Modif
+SF:ied:\x20Sun,\x2001\x20Mar\x202026\x2016:27:04\x20GMT\r\nETag:\x20W/\"21
+SF:7-19caa398bc0\"\r\nContent-Type:\x20text/html;\x20charset=UTF-8\r\nCont
+SF:ent-Length:\x20535\r\nDate:\x20Wed,\x2001\x20Apr\x202026\x2005:15:05\x2
+SF:0GMT\r\nConnection:\x20close\r\n\r\n<!DOCTYPE\x20html>\n<html>\n<head>\
+SF:n<meta\x20charset=\"utf-8\">\n<meta\x20name=\"viewport\"\x20content=\"w
+SF:idth=device-width,\x20user-scalable=no,\x20initial-scale=1\.0,\x20maxim
+SF:um-scale=1\.0,\x20minimum-scale=1\.0\">\n<meta\x20h")%r(SSLSessionReq,2
+SF:F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")
+SF:%r(TLSSessionReq,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\
+SF:x20close\r\n\r\n");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port6185-TCP:V=7.95%I=2%D=4/1%Time=69CCA9D3%P=x86_64-pc-linux-gnu%r(Gen
+SF:ericLines,73,"HTTP/1\.1\x20400\x20\r\ncontent-length:\x200\r\nconnectio
+SF:n:\x20close\r\ndate:\x20Wed,\x2001\x20Apr\x202026\x2005:14:59\x20GMT\r\
+SF:nserver:\x20hypercorn-h11\r\n\r\n")%r(GetRequest,73,"HTTP/1\.1\x20500\x
+SF:20\r\ncontent-length:\x200\r\ndate:\x20Wed,\x2001\x20Apr\x202026\x2005:
+SF:14:59\x20GMT\r\nserver:\x20hypercorn-h11\r\nConnection:\x20close\r\n\r\
+SF:n")%r(SSLSessionReq,73,"HTTP/1\.1\x20400\x20\r\ncontent-length:\x200\r\
+SF:nconnection:\x20close\r\ndate:\x20Wed,\x2001\x20Apr\x202026\x2005:14:59
+SF:\x20GMT\r\nserver:\x20hypercorn-h11\r\n\r\n")%r(TLSSessionReq,73,"HTTP/
+SF:1\.1\x20400\x20\r\ncontent-length:\x200\r\nconnection:\x20close\r\ndate
+SF::\x20Wed,\x2001\x20Apr\x202026\x2005:14:59\x20GMT\r\nserver:\x20hyperco
+SF:rn-h11\r\n\r\n");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port10809-TCP:V=7.95%I=2%D=4/1%Time=69CCA9D4%P=x86_64-pc-linux-gnu%r(NU
+SF:LL,12,"NBDMAGICIHAVEOPT\0\x03")%r(GenericLines,12,"NBDMAGICIHAVEOPT\0\x
+SF:03")%r(GetRequest,12,"NBDMAGICIHAVEOPT\0\x03")%r(SSLSessionReq,12,"NBDM
+SF:AGICIHAVEOPT\0\x03")%r(TLSSessionReq,12,"NBDMAGICIHAVEOPT\0\x03");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port16000-TCP:V=7.95%I=2%D=4/1%Time=69CCA9DE%P=x86_64-pc-linux-gnu%r(Ge
+SF:nericLines,8D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allowed\x20\r\nCont
+SF:ent-Type:\x20text/html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x2001\x
+SF:20Apr\x202026\x2005:15:05\x20GMT\r\nContent-Length:\x205\r\n\r\nERROR")
+SF:%r(GetRequest,8D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allowed\x20\r\nC
+SF:ontent-Type:\x20text/html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x200
+SF:1\x20Apr\x202026\x2005:15:10\x20GMT\r\nContent-Length:\x205\r\n\r\nERRO
+SF:R")%r(SSLSessionReq,8D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allowed\x2
+SF:0\r\nContent-Type:\x20text/html\r\nConnection:\x20Close\r\nDate:\x20Wed
+SF:,\x2001\x20Apr\x202026\x2005:15:15\x20GMT\r\nContent-Length:\x205\r\n\r
+SF:\nERROR")%r(TLSSessionReq,8D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allo
+SF:wed\x20\r\nContent-Type:\x20text/html\r\nConnection:\x20Close\r\nDate:\
+SF:x20Wed,\x2001\x20Apr\x202026\x2005:15:20\x20GMT\r\nContent-Length:\x205
+SF:\r\n\r\nERROR");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port26000-TCP:V=7.95%I=2%D=4/1%Time=69CCA9D9%P=x86_64-pc-linux-gnu%r(Ge
+SF:nericLines,8D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allowed\x20\r\nCont
+SF:ent-Type:\x20text/html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x2001\x
+SF:20Apr\x202026\x2005:15:00\x20GMT\r\nContent-Length:\x205\r\n\r\nERROR")
+SF:%r(GetRequest,5C83,"HTTP/1\.1\x20200\x20OK\x20\r\nContent-Type:\x20text
+SF:/html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x2001\x20Apr\x202026\x20
+SF:05:15:05\x20GMT\r\nContent-Length:\x2023559\r\n\r\n<html>\r\n<head>\r\n
+SF:\x20\x20\x20\x20<meta\x20charset=\"utf-8\">\r\n\x20\x20\x20\x20<meta\x2
+SF:0http-equiv=\"X-UA-Compatible\"\x20content=\"IE=edge\">\r\n\x20\x20\x20
+SF:\x20<!--\x20HTTP\x201\.1\x20-->\x20\x20\r\n\x20\x20\x20\x20<meta\x20htt
+SF:p-equiv=\"pragma\"\x20content=\"no-cache\">\x20\x20\r\n\x20\x20\x20\x20
+SF:<!--\x20HTTP\x201\.0\x20-->\x20\x20\r\n\x20\x20\x20\x20<meta\x20http-eq
+SF:uiv=\"cache-control\"\x20content=\"no-cache\">\x20\x20\r\n\x20\x20\x20\
+SF:x20<title>iVentoy</title>\r\n\x20\x20\x20\x20<!--\x20Tell\x20the\x20bro
+SF:wser\x20to\x20be\x20responsive\x20to\x20screen\x20width\x20-->\r\n\x20\
+SF:x20\x20\x20<meta\x20content=\"width=device-width,\x20initial-scale=1,\x
+SF:20maximum-scale=1,\x20user-scalable=no\"\x20name=\"viewport\">\r\n\x20\
+SF:x20\x20\x20<!--\x20Bootstrap\x203\.3\.5\x20-->\r\n\x20\x20\x20\x20<link
+SF:\x20rel=\"stylesheet\"\x20href=\"static/bootstrap/css/bootstrap\.min\.c
+SF:ss\">\r\n\x20\x20\x20\x20<!--\x20Font\x20Awesome\x20-->\r\n\x20\x20\x20
+SF:\x20<link\x20rel=\"stylesheet\"\x20href=\"static/css/font-awesome\.min\
+SF:.css\">\r\n\x20\x20\x20\x20<!--\x20Ionicons\x20-->\r\n\x20\x20\x20\x20<
+SF:link\x20rel=\"stylesheet\"\x20href=\"static/css/ionicons\.min\.css\">\r
+SF:\n\x20\x20\x20\x20<!--\x20Theme\x20style\x20-")%r(SSLSessionReq,8D,"HTT
+SF:P/1\.1\x20405\x20Method\x20Not\x20Allowed\x20\r\nContent-Type:\x20text/
+SF:html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x2001\x20Apr\x202026\x200
+SF:5:15:05\x20GMT\r\nContent-Length:\x205\r\n\r\nERROR")%r(TLSSessionReq,8
+SF:D,"HTTP/1\.1\x20405\x20Method\x20Not\x20Allowed\x20\r\nContent-Type:\x2
+SF:0text/html\r\nConnection:\x20Close\r\nDate:\x20Wed,\x2001\x20Apr\x20202
+SF:6\x2005:15:10\x20GMT\r\nContent-Length:\x205\r\n\r\nERROR");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port37901-TCP:V=7.95%I=2%D=4/1%Time=69CCA9E9%P=x86_64-pc-linux-gnu%r(TL
+SF:SSessionReq,186,"\xd3\xec\x87\0\xeb\x86\xd3\xd5Kk\x87\x9f\x8feh\t\?q\xf
+SF:1\x17\xb0\x928l\xf3\xa1\xec\x8f\(\x83\xccB\xb6\x97\xbf\xcf\xe1\xff\xaa\
+SF:x8a\xa2\xcf\xcb\xa9\0\xbb\xc0\x93<\xaem\x10\xdf\xfd\xa8\xa3\x1e\x1e\xfa
+SF:\x08t\x13\*\xf5\xda\x97\x05\x89\x1c\xd5\xbd5\\o\xc5\x90\xf6\xc6\xbf\(\x
+SF:0c\x86\xfd\x1fK\xe6\x20r\x126:~=6A\x8f\x9c:\x9b\xfb\x91T3\x88\x87'\\\xf
+SF:7\x8c\x20v\xdaU\x81B\xf0\xf8j\x1fJc\xf1\xf0M~\xff\xfc\xf3\x91\xd7\\\xbd
+SF:\xb0\x07t\]\xb9\x0f\xb3\xb6s\xb8\xef\x99\xa4\xff6\x04\xef\xd6\xbf\xf6j\
+SF:xb1#C\xe7\xf5\xf9\x81X\xfa\x89\xda\xb4\xccG\xba\xb8\xe0\x20o\x99\xff\xb
+SF:3\xf5\xf4\x92g\x96\xe71\x15\x9e=6\x04\xe7\xb3\x0b:\xb4l2\xdb\xb8\x06\x8
+SF:0\xb8\xbe\x16\x7f\xfc\x1c\xd4\x20<\x83\xc9Qx\xc6\xdcS\x84\xb2FW\x94\x8e
+SF:\tb\x03}\xb5\xc1\]\]\xb4o\xe7\xa6\0S'X\x8cf1\x96\xb9v\xc7\x063\x7f\xc6\
+SF:xd1&aP\xdd\x11\xec\xb0\xec\xff\"9\xdd\x9f\xee\r\xa1\xab\xd0h\x80\xfb\xc
+SF:fd\xf1\x01\xac\xa4\+\xf8zv\xe2\x85\x20\xe7\x91!Q\x8e\x04\rO\xd6\x94\xa4
+SF:\x8aN\*\x82\x9ffa\x9e\xd0\xd4{\|U\xb0\x0e\x1d\xd6\xb2\xab\x89\xbe\xa9\x
+SF:18\xe8\x06\xdf\xe7\xa7Y\xf6\xc6\xa8\xb4\x08BN\xd2\xff\xf8\xa7\xc362\xf8
+SF:\x94\xa4\xf4\xaeb\(\xec\xd9{a\x179\xb6\.\xdfX\xf46\xa7\x924K\xfc\(\x9e\
+SF:^\x99\xb1\x95'\x05\xc9\xec\xdd\xa9\x83\|\xb6_\xd2\xcd\x12\xf4\x05\xfb\x
+SF:fd-\xcf\xfa\xb0CCf");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port49153-TCP:V=7.95%I=2%D=4/1%Time=69CCA9DA%P=x86_64-pc-linux-gnu%r(mo
+SF:ngodb,DE,"HTTP/0\.0\x20400\x20Bad\x20Request\r\nSERVER:\x20Linux/6\.12\
+SF:.18-trim,\x20UPnP/1\.0,\x20Portable\x20SDK\x20for\x20UPnP\x20devices/1\
+SF:.14\.16\r\nCONTENT-LENGTH:\x2050\r\nAccept-Ranges:\x20bytes\r\nCONTENT-
+SF:TYPE:\x20text/html\r\n\r\n<html><body><h1>400\x20Bad\x20Request</h1></b
+SF:ody></html>")%r(SSLSessionReq,DE,"HTTP/0\.0\x20400\x20Bad\x20Request\r\
+SF:nSERVER:\x20Linux/6\.12\.18-trim,\x20UPnP/1\.0,\x20Portable\x20SDK\x20f
+SF:or\x20UPnP\x20devices/1\.14\.16\r\nCONTENT-LENGTH:\x2050\r\nAccept-Rang
+SF:es:\x20bytes\r\nCONTENT-TYPE:\x20text/html\r\n\r\n<html><body><h1>400\x
+SF:20Bad\x20Request</h1></body></html>")%r(TLSSessionReq,DE,"HTTP/0\.0\x20
+SF:400\x20Bad\x20Request\r\nSERVER:\x20Linux/6\.12\.18-trim,\x20UPnP/1\.0,
+SF:\x20Portable\x20SDK\x20for\x20UPnP\x20devices/1\.14\.16\r\nCONTENT-LENG
+SF:TH:\x2050\r\nAccept-Ranges:\x20bytes\r\nCONTENT-TYPE:\x20text/html\r\n\
+SF:r\n<html><body><h1>400\x20Bad\x20Request</h1></body></html>");
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel, cpe:/o:linux:linux_kernel:6.12.18-trim
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Wed Apr  1 05:15:32 2026 -- 1 IP address (1 host up) scanned in 38.66 seconds

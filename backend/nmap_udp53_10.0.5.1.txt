@@ -1,0 +1,12 @@
+# Nmap 7.95 scan initiated Wed Apr  1 07:29:47 2026 as: nmap -sU -Pn -p 53 --script dns-recursion,dns-nsid,dns-service-discovery -oN nmap_udp53_10.0.5.1.txt 10.0.5.1
+Nmap scan report for 10.0.5.1
+Host is up (0.14s latency).
+
+PORT   STATE SERVICE
+53/udp open  domain
+| dns-nsid: 
+|   NSID: 12m963 (31326d393633)
+|_  id.server: LAX
+|_dns-recursion: Recursion appears to be enabled
+
+# Nmap done at Wed Apr  1 07:29:49 2026 -- 1 IP address (1 host up) scanned in 1.28 seconds

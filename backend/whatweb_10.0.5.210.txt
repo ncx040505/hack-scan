@@ -1,0 +1,29 @@
+http://10.0.5.210:80 [302 Found] Country[RESERVED][ZZ], HTTPServer[nginx], IP[10.0.5.210], RedirectLocation[http://10.0.5.210:5000/], Title[302 Found], nginx
+http://10.0.5.210:443 [400 Bad Request] Country[RESERVED][ZZ], HTTPServer[nginx], IP[10.0.5.210], Title[400 The plain HTTP request was sent to HTTPS port], nginx
+https://10.0.5.210:443 [302 Found] Country[RESERVED][ZZ], HTTPServer[nginx], IP[10.0.5.210], RedirectLocation[https://10.0.5.210:5001/], Title[302 Found], nginx
+http://10.0.5.210:5005 [401 Unauthorized] Country[RESERVED][ZZ], IP[10.0.5.210], UncommonHeaders[x-content-type-options], WWW-Authenticate[Restricted][Basic]
+http://10.0.5.210:3000 [200 OK] Country[RESERVED][ZZ], Email[me@vishnu.pro,support@openspeedtest.com], HTML5, HTTPServer[nginx], IP[10.0.5.210], Object[image/svg+xml], Script[text/javascript], Title[SpeedTest by OpenSpeedTest™], X-UA-Compatible[IE=edge], nginx
+http://10.0.5.210:5000 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:5700 [200 OK] Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], Script, Strict-Transport-Security[max-age=31536000; includeSubDomains], UncommonHeaders[cross-origin-opener-policy,cross-origin-resource-policy,origin-agent-cluster,referrer-policy,x-content-type-options,x-dns-prefetch-control,x-download-options,x-permitted-cross-domain-policies,access-control-allow-origin], X-Frame-Options[SAMEORIGIN], X-UA-Compatible[ie=edge], X-XSS-Protection[0]
+https://10.0.5.210:5006 [401 Unauthorized] Country[RESERVED][ZZ], IP[10.0.5.210], UncommonHeaders[x-content-type-options], WWW-Authenticate[Restricted][Basic]
+http://10.0.5.210:6099 [301 Moved Permanently] Access-Control-Allow-Methods[GET, POST, PUT, DELETE, OPTIONS], Country[RESERVED][ZZ], IP[10.0.5.210], RedirectLocation[/webui], UncommonHeaders[access-control-allow-origin,access-control-allow-methods,access-control-allow-headers,access-control-allow-credentials], X-Powered-By[Express]
+https://10.0.5.210:5001 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:6186 [404 Not Found] Country[RESERVED][ZZ], HTTPServer[Python/3.12 aiohttp/3.13.3], IP[10.0.5.210]
+http://10.0.5.210:8005 [301 Moved Permanently] Country[RESERVED][ZZ], IP[10.0.5.210], RedirectLocation[/v]
+http://10.0.5.210:8000 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:8156 [200 OK] Country[RESERVED][ZZ], HTTPServer[uvicorn], IP[10.0.5.210]
+http://10.0.5.210:8157 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx/1.26.3], IP[10.0.5.210], Script[module], Title[Bay Dashboard], nginx[1.26.3]
+https://10.0.5.210:8001 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:8418 [200 OK] Cookies[_csrf,i_like_gitea], Country[RESERVED][ZZ], HTML5, HttpOnly[_csrf,i_like_gitea], IP[10.0.5.210], Meta-Author[Gitea - Git with a cup of tea], Open-Graph-Protocol[website], PoweredBy[Gitea], Script, Title[Canary233 Private repositories], X-Frame-Options[SAMEORIGIN]
+http://10.0.5.210:8123 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer, IP[10.0.5.210], Script, Title[Home Assistant], UncommonHeaders[referrer-policy,x-content-type-options], X-Frame-Options[SAMEORIGIN]
+http://10.0.5.210:9645 [404 Not Found] Country[RESERVED][ZZ], HTTPServer[uvicorn], IP[10.0.5.210]
+http://10.0.5.210:12712 [301 Moved Permanently] Access-Control-Allow-Methods[GET, HEAD, POST, PATCH, PUT, DELETE], Country[RESERVED][ZZ], IP[10.0.5.210], RedirectLocation[/manager], UncommonHeaders[access-control-allow-credentials,access-control-allow-headers,access-control-allow-methods,access-control-allow-origin,access-control-expose-headers,access-control-max-age,traceparent]
+http://10.0.5.210:15244 [404 Not Found] Country[RESERVED][ZZ], IP[10.0.5.210]
+http://10.0.5.210:44535 [405 Method Not Allowed] Country[RESERVED][ZZ], HTTPServer[Python/3.14 aiohttp/3.13.3], IP[10.0.5.210]
+http://10.0.5.210:5000/ [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:20365 [200 OK] Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], Script[module], Title[微备份], UncommonHeaders[access-control-allow-origin]
+https://10.0.5.210:5001/ [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx
+http://10.0.5.210:6099/webui [301 Moved Permanently] Access-Control-Allow-Methods[GET, POST, PUT, DELETE, OPTIONS], Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], RedirectLocation[/webui/], Title[Redirecting], UncommonHeaders[access-control-allow-origin,access-control-allow-methods,access-control-allow-headers,access-control-allow-credentials,content-security-policy,x-content-type-options], X-Powered-By[Express]
+http://10.0.5.210:8005/v [200 OK] Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], Script[module], Title[飞牛影视]
+http://10.0.5.210:12712/manager [200 OK] Access-Control-Allow-Methods[GET, HEAD, POST, PATCH, PUT, DELETE], Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], Script[module], Title[docker copilot], UncommonHeaders[access-control-allow-credentials,access-control-allow-headers,access-control-allow-methods,access-control-allow-origin,access-control-expose-headers,access-control-max-age,traceparent]
+http://10.0.5.210:6099/webui/ [200 OK] Access-Control-Allow-Methods[GET, POST, PUT, DELETE, OPTIONS], Country[RESERVED][ZZ], HTML5, IP[10.0.5.210], Open-Graph-Protocol, Script[module], Title[NapCat WebUI], UncommonHeaders[access-control-allow-origin,access-control-allow-methods,access-control-allow-headers,access-control-allow-credentials], X-Powered-By[Express]

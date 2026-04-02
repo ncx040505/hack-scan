@@ -1,0 +1,406 @@
+"""Security Tools / Knowledgebase API endpoints"""
+import os
+import uuid
+import shutil
+import aiofiles
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from loguru import logger
+
+from app.core.database import get_db
+from app.core.config import get_settings
+from app.models.database import SecurityTool, ToolType
+from app.schemas.scan import (
+    SecurityToolCreate, SecurityToolUpdate, SecurityToolResponse, SecurityToolList
+)
+
+settings = get_settings()
+router = APIRouter(prefix="/tools", tags=["tools"])
+
+# 工具存储目录
+TOOLS_DIR = Path("/app/data/tools")
+ALLOWED_EXTENSIONS = {
+    "script": [".py", ".sh", ".bash", ".pl", ".rb", ".js", ".ts", ".go", ".rs", ".ps1"],
+    "nuclei": [".yaml", ".yml"],
+    "wordlist": [".txt", ".lst", ".dic", ".list"],
+    "config": [".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".cfg", ".xml"],
+    "skill": [".py", ".md", ".zip"],  # AI Skill 支持 Python 脚本、Markdown 和 SkillHub zip 包
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+def ensure_tools_dir():
+    """确保工具目录存在"""
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    for tool_type in ToolType:
+        (TOOLS_DIR / tool_type.value).mkdir(exist_ok=True)
+
+
+def validate_file_extension(filename: str, tool_type: str) -> bool:
+    """验证文件扩展名"""
+    ext = Path(filename).suffix.lower()
+    allowed = ALLOWED_EXTENSIONS.get(tool_type, [])
+    return ext in allowed
+
+
+@router.post("", response_model=SecurityToolResponse)
+async def upload_tool(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    tool_type: str = Form(...),
+    description: str = Form(None),
+    category: str = Form(None),
+    tags: str = Form(""),  # 逗号分隔
+    usage_instructions: str = Form(None),
+    author: str = Form(None),
+    version: str = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """上传安全工具"""
+    ensure_tools_dir()
+    
+    logger.info(f"Upload tool: name={name}, type={tool_type}, file={file.filename}")
+    
+    # 验证工具类型
+    if tool_type not in [t.value for t in ToolType]:
+        logger.warning(f"Invalid tool type: {tool_type}")
+        raise HTTPException(status_code=400, detail=f"无效的工具类型: {tool_type}")
+    
+    # 验证文件扩展名
+    if not validate_file_extension(file.filename, tool_type):
+        allowed = ALLOWED_EXTENSIONS.get(tool_type, [])
+        ext = Path(file.filename).suffix.lower() if file.filename else "(无扩展名)"
+        logger.warning(f"Invalid file extension: {ext} for type {tool_type}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"不支持的文件类型 '{ext}'。{tool_type} 类型允许: {', '.join(allowed)}"
+        )
+    
+    # 检查文件大小
+    file.file.seek(0, 2)  # 移到文件末尾
+    file_size = file.file.tell()
+    file.file.seek(0)  # 重置位置
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+    
+    # 生成安全的文件名
+    tool_id = str(uuid.uuid4())
+    ext = Path(file.filename).suffix
+    safe_filename = f"{tool_id}{ext}"
+    file_path = TOOLS_DIR / tool_type / safe_filename
+    
+    # 保存文件
+    try:
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+    except Exception as e:
+        logger.error(f"Failed to save tool file: {e}")
+        raise HTTPException(status_code=500, detail="文件保存失败")
+    
+    # 解析标签
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    
+    # 创建数据库记录
+    tool = SecurityTool(
+        id=tool_id,
+        name=name,
+        description=description,
+        tool_type=ToolType(tool_type),
+        filename=file.filename,
+        file_path=str(file_path),
+        file_size=file_size,
+        category=category,
+        tags=tag_list,
+        usage_instructions=usage_instructions,
+        author=author,
+        version=version,
+        is_enabled=True,
+        is_verified=False,
+    )
+    
+    db.add(tool)
+    await db.commit()
+    await db.refresh(tool)
+    
+    logger.info(f"Tool uploaded: {name} ({tool_type})")
+    
+    return SecurityToolResponse(
+        id=tool.id,
+        name=tool.name,
+        description=tool.description,
+        tool_type=tool.tool_type.value,
+        filename=tool.filename,
+        file_size=tool.file_size,
+        category=tool.category,
+        tags=tool.tags or [],
+        usage_instructions=tool.usage_instructions,
+        is_enabled=tool.is_enabled,
+        is_verified=tool.is_verified,
+        author=tool.author,
+        version=tool.version,
+        created_at=tool.created_at,
+        updated_at=tool.updated_at,
+    )
+
+
+@router.get("", response_model=SecurityToolList)
+async def list_tools(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    tool_type: str | None = None,
+    category: str | None = None,
+    enabled_only: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取工具列表"""
+    query = select(SecurityTool).order_by(SecurityTool.created_at.desc())
+    count_query = select(func.count(SecurityTool.id))
+    
+    if tool_type:
+        query = query.where(SecurityTool.tool_type == ToolType(tool_type))
+        count_query = count_query.where(SecurityTool.tool_type == ToolType(tool_type))
+    
+    if category:
+        query = query.where(SecurityTool.category == category)
+        count_query = count_query.where(SecurityTool.category == category)
+    
+    if enabled_only:
+        query = query.where(SecurityTool.is_enabled == True)
+        count_query = count_query.where(SecurityTool.is_enabled == True)
+    
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    tools = result.scalars().all()
+    total = (await db.execute(count_query)).scalar()
+    
+    return SecurityToolList(
+        total=total,
+        items=[
+            SecurityToolResponse(
+                id=t.id,
+                name=t.name,
+                description=t.description,
+                tool_type=t.tool_type.value,
+                filename=t.filename,
+                file_size=t.file_size,
+                category=t.category,
+                tags=t.tags or [],
+                usage_instructions=t.usage_instructions,
+                is_enabled=t.is_enabled,
+                is_verified=t.is_verified,
+                author=t.author,
+                version=t.version,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+            )
+            for t in tools
+        ]
+    )
+
+
+@router.get("/categories/list")
+async def list_categories(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取所有工具分类"""
+    result = await db.execute(
+        select(SecurityTool.category).where(SecurityTool.category != None).distinct()
+    )
+    categories = [row[0] for row in result.all()]
+    
+    return {
+        "categories": sorted(set(categories)),
+        "tool_types": [t.value for t in ToolType]
+    }
+
+
+@router.get("/skill-template")
+async def get_skill_template():
+    """获取 Skill 模板示例"""
+    template = '''"""
+Skill 名称: 描述您的 Skill 功能
+"""
+
+# ============ Skill 元数据（必需）============
+SKILL_NAME = "my_skill"  # Skill 唯一标识名
+SKILL_DESCRIPTION = "描述这个 Skill 的功能"
+
+# 参数定义（JSON Schema 格式）
+SKILL_PARAMETERS = {
+    "target": {
+        "type": "string",
+        "description": "目标地址",
+        "required": True
+    },
+    "option": {
+        "type": "string",
+        "description": "可选参数",
+        "required": False
+    }
+}
+
+
+# ============ Skill 入口函数（必需）============
+async def run(target: str, option: str = None, **kwargs) -> dict:
+    """
+    执行 Skill
+    
+    Args:
+        target: 目标地址
+        option: 可选参数
+        
+    Returns:
+        dict: {"success": bool, "output": str, "error": str | None}
+    """
+    try:
+        # 在这里编写您的逻辑
+        result = f"对 {target} 执行了操作"
+        
+        return {
+            "success": True,
+            "output": result
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "output": "",
+            "error": str(e)
+        }
+'''
+    return {"template": template}
+
+
+@router.get("/{tool_id}", response_model=SecurityToolResponse)
+async def get_tool(
+    tool_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取工具详情"""
+    result = await db.execute(
+        select(SecurityTool).where(SecurityTool.id == tool_id)
+    )
+    tool = result.scalar_one_or_none()
+    
+    if not tool:
+        raise HTTPException(status_code=404, detail="工具不存在")
+    
+    return SecurityToolResponse(
+        id=tool.id,
+        name=tool.name,
+        description=tool.description,
+        tool_type=tool.tool_type.value,
+        filename=tool.filename,
+        file_size=tool.file_size,
+        category=tool.category,
+        tags=tool.tags or [],
+        usage_instructions=tool.usage_instructions,
+        is_enabled=tool.is_enabled,
+        is_verified=tool.is_verified,
+        author=tool.author,
+        version=tool.version,
+        created_at=tool.created_at,
+        updated_at=tool.updated_at,
+    )
+
+
+@router.get("/{tool_id}/content")
+async def get_tool_content(
+    tool_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取工具文件内容（仅文本文件）"""
+    result = await db.execute(
+        select(SecurityTool).where(SecurityTool.id == tool_id)
+    )
+    tool = result.scalar_one_or_none()
+    
+    if not tool:
+        raise HTTPException(status_code=404, detail="工具不存在")
+    
+    file_path = Path(tool.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    try:
+        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+        return {"content": content, "filename": tool.filename}
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="无法读取二进制文件")
+
+
+@router.patch("/{tool_id}", response_model=SecurityToolResponse)
+async def update_tool(
+    tool_id: str,
+    update_data: SecurityToolUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新工具信息"""
+    result = await db.execute(
+        select(SecurityTool).where(SecurityTool.id == tool_id)
+    )
+    tool = result.scalar_one_or_none()
+    
+    if not tool:
+        raise HTTPException(status_code=404, detail="工具不存在")
+    
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(tool, key, value)
+    
+    await db.commit()
+    await db.refresh(tool)
+    
+    return SecurityToolResponse(
+        id=tool.id,
+        name=tool.name,
+        description=tool.description,
+        tool_type=tool.tool_type.value,
+        filename=tool.filename,
+        file_size=tool.file_size,
+        category=tool.category,
+        tags=tool.tags or [],
+        usage_instructions=tool.usage_instructions,
+        is_enabled=tool.is_enabled,
+        is_verified=tool.is_verified,
+        author=tool.author,
+        version=tool.version,
+        created_at=tool.created_at,
+        updated_at=tool.updated_at,
+    )
+
+
+@router.delete("/{tool_id}")
+async def delete_tool(
+    tool_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """删除工具"""
+    result = await db.execute(
+        select(SecurityTool).where(SecurityTool.id == tool_id)
+    )
+    tool = result.scalar_one_or_none()
+    
+    if not tool:
+        raise HTTPException(status_code=404, detail="工具不存在")
+    
+    # 删除文件
+    file_path = Path(tool.file_path)
+    if file_path.exists():
+        try:
+            file_path.unlink()
+        except Exception as e:
+            logger.warning(f"Failed to delete tool file: {e}")
+    
+    # 删除数据库记录
+    await db.delete(tool)
+    await db.commit()
+    
+    logger.info(f"Tool deleted: {tool.name}")
+    
+    return {"message": "工具已删除", "id": tool_id}

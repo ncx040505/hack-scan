@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');
+
+:root {
+  --font-display: "Space Grotesk", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased transition-colors duration-200;
+    font-family: var(--font-body);
+  }
+
+  .dark body,
+  html.dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
+
+/* Dark mode root background */
+html.dark {
+  background-color: rgb(17 24 39);
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  background-color: rgb(249 250 251);
+  color-scheme: light;
+}
+
+@keyframes rise {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}

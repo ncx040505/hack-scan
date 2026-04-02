@@ -1,0 +1,3 @@
+# Nmap 7.95 scan initiated Wed Apr  1 07:15:19 2026 as: nmap -sS -sV -O -Pn -p 22,53,80,443 --script ssh2-enum-algos,ssh-hostkey,ssh-auth-methods,dns-recursion,dns-service-discovery,dns-nsid,http-title,http-headers,http-methods,http-server-header,http-enum,ssl-cert,ssl-enum-ciphers -oN nmap_detail_10.0.5.1.txt
+WARNING: No targets were specified, so 0 hosts scanned.
+# Nmap done at Wed Apr  1 07:15:19 2026 -- 0 IP addresses (0 hosts up) scanned in 0.12 seconds
