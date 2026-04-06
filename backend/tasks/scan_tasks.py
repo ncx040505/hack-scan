@@ -48,12 +48,8 @@ async def _fetch_agent_configs(session_factory) -> tuple[dict | None, dict | Non
                 'max_tokens': db_config.max_tokens,
             }
         else:
-            llm_config = {
-                'model': celery_settings.llm_model,
-                'temperature': celery_settings.llm_temperature,
-                'api_key': celery_settings.openai_api_key,
-                'base_url': celery_settings.openai_base_url,
-            }
+            # 无配置时返回 None，让调用方决定如何处理
+            llm_config = None
         
         # 加载搜索配置
         search_settings = await get_search_settings_from_db(db)
@@ -127,6 +123,75 @@ async def _save_findings(session_factory, scan_task_id: str, findings: list[Scan
             session.add(vuln)
 
         await session.commit()
+
+
+async def _analyze_vulnerabilities(session_factory, scan_task_id: str, scan_logger):
+    """对关键漏洞进行 LLM 分析，生成修复建议"""
+    from llm.analyzer import get_analyzer
+    
+    async with session_factory() as session:
+        # 获取所有非端口扫描的漏洞
+        result = await session.execute(
+            select(Vulnerability)
+            .where(Vulnerability.scan_task_id == scan_task_id)
+            .where(~Vulnerability.name.startswith("Open port:"))
+        )
+        vulnerabilities = result.scalars().all()
+        
+        if not vulnerabilities:
+            return
+        
+        # 优先分析高危和严重漏洞，限制数量避免超时
+        priority_vulns = [
+            v for v in vulnerabilities 
+            if v.severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH]
+        ][:10]  # 最多分析10个高危漏洞
+        
+        if not priority_vulns:
+            # 如果没有高危漏洞，分析前5个中危漏洞
+            priority_vulns = [
+                v for v in vulnerabilities 
+                if v.severity == SeverityLevel.MEDIUM
+            ][:5]
+        
+        if not priority_vulns:
+            return
+        
+        analyzer = get_analyzer()
+        analyzed_count = 0
+        
+        for vuln in priority_vulns:
+            try:
+                # 调用 LLM 分析单个漏洞
+                analysis = await analyzer.analyze_vulnerability(
+                    vuln_name=vuln.name,
+                    vuln_type=vuln.category or "unknown",
+                    evidence=vuln.evidence or "",
+                    context=f"位置: {vuln.location}\n描述: {vuln.description}"
+                )
+                
+                # 更新漏洞记录
+                vuln.llm_analysis = analysis.summary
+                vuln.llm_remediation = "\n".join(analysis.remediation_steps)
+                vuln.llm_false_positive_score = analysis.false_positive_likelihood
+                
+                analyzed_count += 1
+                
+                scan_logger.llm(
+                    f"✅ 分析完成: {vuln.name[:50]}",
+                    f"修复建议: {len(analysis.remediation_steps)} 项"
+                )
+                
+            except Exception as e:
+                logger.error(f"Failed to analyze vulnerability {vuln.id}: {e}")
+                scan_logger.error(f"❌ 漏洞分析失败: {vuln.name[:50]}", str(e))
+        
+        if analyzed_count > 0:
+            await session.commit()
+            scan_logger.success(
+                f"🎯 漏洞分析完成",
+                f"已为 {analyzed_count} 个关键漏洞生成修复建议"
+            )
 
 
 async def _save_agent_pause(
@@ -359,6 +424,20 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                     _fetch_agent_configs(session_factory)
                 )
                 
+                # 检查 LLM 配置是否存在
+                if llm_config is None:
+                    scan_logger.error("❌ LLM 配置未设置", "请在 Web 界面的设置页面中添加 LLM 配置")
+                    errors.append("LLM 配置未设置，AI 代理无法运行")
+                    # 跳过 AI Agent 阶段，继续保存扫描结果
+                    loop.run_until_complete(_save_findings(session_factory, scan_task_id, findings))
+                    loop.run_until_complete(_update_scan_status(
+                        session_factory=session_factory,
+                        scan_task_id=scan_task_id,
+                        status=ScanStatus.COMPLETED,
+                        completed_at=datetime.utcnow(),
+                    ))
+                    return {"status": "completed_without_ai", "message": "扫描完成，但 AI 分析被跳过（未配置 LLM）"}
+                
                 # 运行 AI Agent
                 agent_result = loop.run_until_complete(run_security_agent(
                     target=target,
@@ -409,14 +488,128 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 
                 # 添加 Agent 发现到 findings
                 if agent_result.get("findings"):
+                    agent_findings = agent_result["findings"]
                     scan_logger.success(
-                        f"🎯 AI Agent 发现 {len(agent_result['findings'])} 个问题",
-                        json.dumps(agent_result["findings"], ensure_ascii=False, indent=2)
+                        f"🎯 AI Agent 发现 {len(agent_findings)} 个问题",
+                        json.dumps(agent_findings, ensure_ascii=False, indent=2)
                     )
+                    
+                    # 将 Agent 发现转换为 ScanFinding 对象
+                    for af in agent_findings:
+                        keyword = af.get('keyword', 'security issue')
+                        tool_used = af.get('tool', 'unknown')
+                        finding = ScanFinding(
+                            scanner=ScannerType.CUSTOM,
+                            name=f"{keyword.upper()} 检测到潜在安全风险",
+                            severity=af.get('severity', 'medium'),
+                            category=f"ai_{keyword.replace(' ', '_')}",
+                            description=f"AI Agent 在使用 {tool_used} 工具测试时检测到潜在的 {keyword} 安全问题。建议进一步人工验证。",
+                            location=target,
+                            evidence=af.get('snippet', '')[:4000],
+                            raw_data=af,
+                            metadata={"detected_by": "ai_agent", "tool": tool_used, "keyword": keyword}
+                        )
+                        findings.append(finding)
+                        scan_logger.info(
+                            f"➕ 添加 AI 发现",
+                            f"类型: {keyword}, 严重性: {af.get('severity')}"
+                        )
                 
-                # Agent 的最终总结将用于 LLM summary
+                # 解析 final_summary 中的结构化漏洞信息
                 if agent_result.get("summary"):
-                    scan_context["agent_summary"] = agent_result["summary"]
+                    summary = agent_result["summary"]
+                    
+                    # 尝试解析 JSON 格式的 summary
+                    if isinstance(summary, str):
+                        try:
+                            summary_data = json.loads(summary)
+                            
+                            # 检查是否有 final_summary.confirmed_findings
+                            if isinstance(summary_data, dict):
+                                # 可能直接在 summary_data 中，或在 final_summary 中
+                                confirmed_list = None
+                                if "confirmed_findings" in summary_data:
+                                    confirmed_list = summary_data["confirmed_findings"]
+                                elif "final_summary" in summary_data and isinstance(summary_data["final_summary"], dict):
+                                    confirmed_list = summary_data["final_summary"].get("confirmed_findings")
+                                
+                                if confirmed_list and isinstance(confirmed_list, list):
+                                    for confirmed in confirmed_list:
+                                        cve = confirmed.get("cve", "N/A")
+                                        title = confirmed.get("title", "Unknown vulnerability")
+                                        severity = confirmed.get("severity", "high")
+                                        evidence_list = confirmed.get("evidence", [])
+                                        impact_list = confirmed.get("impact", [])
+                                        
+                                        evidence_text = "\n".join([f"• {e}" for e in evidence_list])
+                                        impact_text = "\n".join([f"• {i}" for i in impact_list])
+                                        
+                                        finding = ScanFinding(
+                                            scanner=ScannerType.CUSTOM,
+                                            name=f"{cve}: {title}",
+                                            severity=severity,
+                                            category="ai_confirmed_vulnerability",
+                                            description=f"AI Agent 通过人工验证确认的漏洞。\n\n影响:\n{impact_text}",
+                                            location=target,
+                                            evidence=evidence_text[:4000],
+                                            raw_data=confirmed,
+                                            metadata={"cve": cve, "ai_confirmed": True}
+                                        )
+                                        findings.append(finding)
+                                        scan_logger.success(
+                                            f"🔍 AI 确认漏洞: {cve}",
+                                            f"严重性: {severity}, 标题: {title}"
+                                        )
+                                
+                                # 使用格式化的 summary
+                                scan_context["agent_summary"] = json.dumps(summary_data, ensure_ascii=False, indent=2)
+                            else:
+                                # 不是预期的结构，直接使用字符串
+                                scan_context["agent_summary"] = summary
+                        except (json.JSONDecodeError, TypeError, KeyError) as e:
+                            # 如果不是 JSON，继续使用字符串 summary
+                            logger.debug(f"Summary is not JSON: {e}")
+                            scan_context["agent_summary"] = summary
+                    elif isinstance(summary, dict):
+                        # 已经是字典对象
+                        confirmed_list = None
+                        if "confirmed_findings" in summary:
+                            confirmed_list = summary["confirmed_findings"]
+                        elif "final_summary" in summary and isinstance(summary["final_summary"], dict):
+                            confirmed_list = summary["final_summary"].get("confirmed_findings")
+                        
+                        if confirmed_list and isinstance(confirmed_list, list):
+                            for confirmed in confirmed_list:
+                                cve = confirmed.get("cve", "N/A")
+                                title = confirmed.get("title", "Unknown vulnerability")
+                                severity = confirmed.get("severity", "high")
+                                evidence_list = confirmed.get("evidence", [])
+                                impact_list = confirmed.get("impact", [])
+                                
+                                evidence_text = "\n".join([f"• {e}" for e in evidence_list])
+                                impact_text = "\n".join([f"• {i}" for i in impact_list])
+                                
+                                finding = ScanFinding(
+                                    scanner=ScannerType.CUSTOM,
+                                    name=f"{cve}: {title}",
+                                    severity=severity,
+                                    category="ai_confirmed_vulnerability",
+                                    description=f"AI Agent 通过人工验证确认的漏洞。\n\n影响:\n{impact_text}",
+                                    location=target,
+                                    evidence=evidence_text[:4000],
+                                    raw_data=confirmed,
+                                    metadata={"cve": cve, "ai_confirmed": True}
+                                )
+                                findings.append(finding)
+                                scan_logger.success(
+                                    f"🔍 AI 确认漏洞: {cve}",
+                                    f"严重性: {severity}, 标题: {title}"
+                                )
+                        
+                        scan_context["agent_summary"] = json.dumps(summary, ensure_ascii=False, indent=2)
+                    else:
+                        scan_context["agent_summary"] = str(summary)
+                    
                     scan_context["agent_tools_used"] = agent_result.get("tools_used", [])
                     scan_context["agent_iterations"] = agent_result.get("iterations", 0)
                 
@@ -487,11 +680,21 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
         else:
             scan_logger.info("ℹ️ 未发现漏洞，跳过 AI 分析")
 
+        # 保存扫描发现
         loop.run_until_complete(_save_findings(
             session_factory=session_factory,
             scan_task_id=scan_task_id,
             findings=findings
         ))
+        
+        # 对关键漏洞进行详细分析（生成修复建议）
+        if findings:
+            scan_logger.llm("🔍 开始分析关键漏洞", "为高危漏洞生成修复建议...")
+            loop.run_until_complete(_analyze_vulnerabilities(
+                session_factory=session_factory,
+                scan_task_id=scan_task_id,
+                scan_logger=scan_logger
+            ))
         
         loop.run_until_complete(_update_scan_status(
             session_factory=session_factory,

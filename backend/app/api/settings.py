@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.models.database import LLMConfig, SystemConfig, AIPersona
 from app.schemas.scan import (
     LLMConfigCreate, LLMConfigUpdate, LLMConfigResponse, LLMConfigList,
-    SearchSettings, SystemSettings,
+    SearchSettings, SystemSettings, ScanSettings,
     AIPersonaCreate, AIPersonaUpdate, AIPersonaResponse, AIPersonaList, AIPersonaBrief
 )
 
@@ -253,6 +253,107 @@ async def test_llm_config(
         }
 
 
+from pydantic import BaseModel as PydanticBaseModel
+
+class FetchModelsRequest(PydanticBaseModel):
+    api_key: str | None = None
+    api_base_url: str | None = None
+    config_id: str | None = None  # 可选：使用已保存配置的 API key
+
+@router.post("/llm/fetch-models")
+async def fetch_llm_models(
+    request: FetchModelsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """从 LLM 提供商获取可用模型列表 (OpenAI 兼容 API)"""
+    import httpx
+    
+    api_key = request.api_key
+    api_base_url = request.api_base_url
+    
+    # 如果提供了 config_id，从数据库获取配置
+    if request.config_id and not api_key:
+        result = await db.execute(
+            select(LLMConfig).where(LLMConfig.id == request.config_id)
+        )
+        config = result.scalar_one_or_none()
+        if config:
+            api_key = config.api_key
+            if not api_base_url:
+                api_base_url = config.api_base_url
+    
+    # 确定 API 地址
+    base_url = (api_base_url or "https://api.openai.com/v1").rstrip("/")
+    models_url = f"{base_url}/models"
+    
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(models_url, headers=headers)
+            
+            if response.status_code == 401:
+                return {
+                    "success": False,
+                    "message": "API Key 无效或未授权",
+                    "models": []
+                }
+            
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "message": f"请求失败: HTTP {response.status_code}",
+                    "models": []
+                }
+            
+            data = response.json()
+            
+            # OpenAI 格式: { "object": "list", "data": [{ "id": "model-id", ... }] }
+            models = []
+            if "data" in data and isinstance(data["data"], list):
+                for item in data["data"]:
+                    model_id = item.get("id", "")
+                    if model_id:
+                        models.append({
+                            "id": model_id,
+                            "owned_by": item.get("owned_by", ""),
+                            "created": item.get("created"),
+                        })
+            
+            # 按模型名称排序
+            models.sort(key=lambda x: x["id"])
+            
+            return {
+                "success": True,
+                "message": f"获取到 {len(models)} 个模型",
+                "models": models
+            }
+            
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "message": "请求超时，请检查网络或 API 地址",
+            "models": []
+        }
+    except httpx.ConnectError:
+        return {
+            "success": False,
+            "message": "无法连接到服务器，请检查 API 地址",
+            "models": []
+        }
+    except Exception as e:
+        logger.error(f"Fetch models failed: {e}")
+        return {
+            "success": False,
+            "message": f"获取失败: {str(e)}",
+            "models": []
+        }
+
+
 # ============ 联网搜索配置 ============
 
 @router.get("/search", response_model=SearchSettings)
@@ -319,6 +420,125 @@ async def update_search_settings(
         settings.api_key = '***'
     
     return settings
+
+
+# ============ 系统设置 ============
+
+@router.get("/system", response_model=SystemSettings)
+async def get_system_settings(
+    db: AsyncSession = Depends(get_db)
+):
+    """获取系统设置"""
+    # 获取搜索设置
+    search_result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "search_settings")
+    )
+    search_config = search_result.scalar_one_or_none()
+    
+    search_settings = SearchSettings()
+    if search_config and search_config.value:
+        try:
+            data = json.loads(search_config.value)
+            if data.get('api_key'):
+                data['api_key'] = '***'
+            search_settings = SearchSettings(**data)
+        except:
+            pass
+    
+    # 获取扫描设置
+    scan_result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "scan_settings")
+    )
+    scan_config = scan_result.scalar_one_or_none()
+    
+    scan_settings = ScanSettings()
+    if scan_config and scan_config.value:
+        try:
+            scan_settings = ScanSettings(**json.loads(scan_config.value))
+        except:
+            pass
+    
+    return SystemSettings(
+        search=search_settings,
+        scan=scan_settings
+    )
+
+
+@router.put("/system", response_model=SystemSettings)
+async def update_system_settings(
+    settings: SystemSettings,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新系统设置"""
+    # 更新搜索设置
+    search_result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "search_settings")
+    )
+    search_config = search_result.scalar_one_or_none()
+    
+    # 如果是 *** 则保留原有的 key
+    if settings.search.api_key == '***' and search_config and search_config.value:
+        try:
+            old_data = json.loads(search_config.value)
+            settings.search.api_key = old_data.get('api_key')
+        except:
+            pass
+    
+    search_value = settings.search.model_dump_json()
+    
+    if search_config:
+        search_config.value = search_value
+    else:
+        search_config = SystemConfig(
+            key="search_settings",
+            value=search_value,
+            description="联网搜索配置"
+        )
+        db.add(search_config)
+    
+    # 更新扫描设置
+    scan_result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "scan_settings")
+    )
+    scan_config = scan_result.scalar_one_or_none()
+    
+    scan_value = settings.scan.model_dump_json()
+    
+    if scan_config:
+        scan_config.value = scan_value
+    else:
+        scan_config = SystemConfig(
+            key="scan_settings",
+            value=scan_value,
+            description="扫描配置"
+        )
+        db.add(scan_config)
+    
+    await db.commit()
+    
+    logger.info(f"System settings updated")
+    
+    # 隐藏返回的 API key
+    if settings.search.api_key:
+        settings.search.api_key = '***'
+    
+    return settings
+
+
+async def get_scan_settings_from_db(db: AsyncSession) -> ScanSettings:
+    """从数据库获取扫描设置"""
+    result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "scan_settings")
+    )
+    config = result.scalar_one_or_none()
+    
+    if config and config.value:
+        try:
+            return ScanSettings(**json.loads(config.value))
+        except:
+            pass
+    
+    return ScanSettings()
 
 
 # ============ 获取活跃的 LLM 配置 ============

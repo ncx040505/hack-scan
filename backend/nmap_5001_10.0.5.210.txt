@@ -1,9 +1,63 @@
-# Nmap 7.95 scan initiated Thu Apr  2 08:10:31 2026 as: nmap -Pn -p 5001 -sV --reason -oN nmap_5001_10.0.5.210.txt 10.0.5.210
+# Nmap 7.95 scan initiated Thu Apr  2 17:38:35 2026 as: nmap -Pn -n -p 5001 -sV --script ssl-cert,ssl-enum-ciphers,http-title,http-headers,http-methods -oN nmap_5001_10.0.5.210.txt 10.0.5.210
 Nmap scan report for 10.0.5.210
-Host is up, received user-set (0.00019s latency).
+Host is up (0.00018s latency).
 
-PORT     STATE SERVICE  REASON         VERSION
-5001/tcp open  ssl/http syn-ack ttl 63 nginx
+PORT     STATE SERVICE  VERSION
+5001/tcp open  ssl/http nginx
+| http-headers: 
+|   Server: nginx
+|   Date: Thu, 02 Apr 2026 17:38:46 GMT
+|   Content-Type: text/html
+|   Content-Length: 2173
+|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
+|   Connection: close
+|   Vary: Accept-Encoding
+|   ETag: "69c8d9a9-87d"
+|   cache-control: no-store
+|   Accept-Ranges: bytes
+|   
+|_  (Request type: HEAD)
+| http-methods: 
+|_  Supported Methods: GET HEAD
+|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
+| ssl-enum-ciphers: 
+|   TLSv1.2: 
+|     ciphers: 
+|       TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_256_CCM (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_CCM (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA (ecdh_x25519) - A
+|     compressors: 
+|       NULL
+|     cipher preference: server
+|   TLSv1.3: 
+|     ciphers: 
+|       TLS_AKE_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_AKE_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_AKE_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|     cipher preference: server
+|_  least strength: A
+| ssl-cert: Subject: commonName=fnOS/organizationName=fnOS
+| Subject Alternative Name: DNS:fnOS
+| Issuer: commonName=fnOS/organizationName=fnOS
+| Public Key type: ec
+| Public Key bits: 256
+| Signature Algorithm: ecdsa-with-SHA256
+| Not valid before: 2025-07-12T08:16:24
+| Not valid after:  2027-07-12T08:16:24
+| MD5:   2523:2b09:f711:a46b:e114:1c37:df81:0c7d
+|_SHA-1: 3ef4:577d:69dc:f15c:62f0:348a:2986:9d86:28c4:cc68
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
-# Nmap done at Thu Apr  2 08:10:42 2026 -- 1 IP address (1 host up) scanned in 11.40 seconds
+# Nmap done at Thu Apr  2 17:38:46 2026 -- 1 IP address (1 host up) scanned in 11.37 seconds

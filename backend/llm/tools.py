@@ -83,10 +83,17 @@ class NmapTool(SecurityTool):
         """
         # 如果提供了 args，通过 shell 执行
         if args:
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            
             # 自动添加 -Pn 跳过主机发现，避免因 ICMP 被过滤导致 "0 hosts up"
             if "-Pn" not in args and "-pn" not in args.lower():
                 args = f"-Pn {args}"
-            return await _run_shell_command(f"nmap {args}", timeout)
+            
+            # 将 target 添加到命令末尾
+            full_cmd = f"nmap {args} {target}"
+            return await _run_shell_command(full_cmd, timeout)
         
         # 标准参数模式
         if not target:
@@ -150,9 +157,13 @@ class CurlTool(SecurityTool):
         
         # 如果提供了 args，直接使用（通过 shell 执行以支持重定向等）
         if args:
+            # 确保 url 参数被包含
+            if not url:
+                return ToolResult(success=False, output="", error="缺少必需参数: url")
+            
             try:
                 proc = await asyncio.create_subprocess_shell(
-                    f"curl {args}",
+                    f"curl {args} {url}",  # 添加 url 到命令末尾
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -227,7 +238,10 @@ class DirBusterTool(SecurityTool):
         """
         # 如果提供了 args，通过 shell 执行
         if args:
-            return await _run_shell_command(f"gobuster {args}", timeout)
+            # 确保 url 参数被包含
+            if not url:
+                return ToolResult(success=False, output="", error="缺少必需参数: url")
+            return await _run_shell_command(f"gobuster {args} -u {url}", timeout)
         
         if not url:
             return ToolResult(success=False, output="", error="缺少必需参数: url")
@@ -299,7 +313,10 @@ class NucleiTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"nuclei {args}", timeout)
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            return await _run_shell_command(f"nuclei {args} -u {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
@@ -353,7 +370,10 @@ class WhatWebTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"whatweb {args}", timeout)
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            return await _run_shell_command(f"whatweb {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
@@ -398,7 +418,10 @@ class SSLScanTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"sslscan {args}", timeout)
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            return await _run_shell_command(f"sslscan {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
@@ -451,7 +474,10 @@ class SQLMapTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"sqlmap {args}", timeout)
+            # 确保 url 参数被包含
+            if not url:
+                return ToolResult(success=False, output="", error="缺少必需参数: url")
+            return await _run_shell_command(f"sqlmap {args} -u {url}", timeout)
         
         if not url:
             return ToolResult(success=False, output="", error="缺少必需参数: url")
@@ -506,7 +532,10 @@ class NiktoTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"nikto {args}", timeout)
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            return await _run_shell_command(f"nikto {args} -h {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
@@ -568,7 +597,15 @@ class HydraTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"hydra {args}", timeout)
+            # Hydra 的 target 通常在命令末尾，格式为 target service
+            # 如果提供了 target 和 service，添加它们
+            if target and service:
+                return await _run_shell_command(f"hydra {args} {target} {service}", timeout)
+            elif target:
+                return await _run_shell_command(f"hydra {args} {target}", timeout)
+            else:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+        
         
         if not target or not service:
             return ToolResult(success=False, output="", error="缺少必需参数: target 和 service")
@@ -637,7 +674,10 @@ class DigTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"dig {args}", timeout)
+            # 确保 domain 参数被包含
+            if not domain:
+                return ToolResult(success=False, output="", error="缺少必需参数: domain")
+            return await _run_shell_command(f"dig {args} {domain}", timeout)
         
         if not domain:
             return ToolResult(success=False, output="", error="缺少必需参数: domain")
@@ -685,7 +725,10 @@ class WhoIsTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            return await _run_shell_command(f"whois {args}", timeout)
+            # 确保 target 参数被包含
+            if not target:
+                return ToolResult(success=False, output="", error="缺少必需参数: target")
+            return await _run_shell_command(f"whois {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
@@ -716,6 +759,39 @@ class NetcatTool(SecurityTool):
     description = "网络工具。用于端口测试、Banner 抓取等。"
     binary_name = "nc"
     
+    def _parse_args_string(self, args_str: str) -> tuple[str, int]:
+        """从 args 字符串中解析 target 和 port
+        
+        支持格式:
+        - "127.0.0.1 80"
+        - "127.0.0.1:80"
+        - "-vz 127.0.0.1 80"
+        - "example.com 443"
+        
+        Returns:
+            (target, port) 或 (None, None)
+        """
+        if not args_str:
+            return None, None
+        
+        # 移除常见的 nc 参数
+        clean_args = re.sub(r'-[a-zA-Z]+\s*', '', args_str).strip()
+        
+        # 尝试匹配 IP/域名:端口 格式
+        match = re.search(r'([\w\.\-]+)[:\s]+(\d+)', clean_args)
+        if match:
+            return match.group(1), int(match.group(2))
+        
+        # 尝试匹配末尾的 IP/域名 端口 格式
+        parts = clean_args.split()
+        if len(parts) >= 2:
+            potential_port = parts[-1]
+            potential_host = parts[-2]
+            if potential_port.isdigit():
+                return potential_host, int(potential_port)
+        
+        return None, None
+    
     async def execute(
         self,
         target: str = None,
@@ -729,14 +805,38 @@ class NetcatTool(SecurityTool):
         Args:
             target: 目标主机
             port: 端口号
-            args: 完整命令行参数
+            args: 完整命令行参数（会尝试智能解析）
             timeout: 超时时间(秒)
         """
+        # 智能参数解析：如果有 args 但缺少 target/port，尝试从 args 解析
+        if args and (not target or port is None):
+            parsed_target, parsed_port = self._parse_args_string(args)
+            if parsed_target and not target:
+                target = parsed_target
+            if parsed_port and port is None:
+                port = parsed_port
+            # 如果成功解析出结构化参数，不再使用原始 args
+            if target and port is not None:
+                logger.debug(f"NetcatTool auto-parsed: target={target}, port={port}")
+                args = None
+        
+        # 如果 target 中包含端口，提取它
+        if target and ':' in target and port is None:
+            parts = target.rsplit(':', 1)
+            if len(parts) == 2 and parts[1].isdigit():
+                target, port = parts[0], int(parts[1])
+                logger.debug(f"NetcatTool extracted port from target: {target}:{port}")
+        
+        # 如果仍有 args 字符串且无法解析，直接执行
         if args:
             return await _run_shell_command(f"nc {args}", timeout)
         
         if not target or port is None:
-            return ToolResult(success=False, output="", error="缺少必需参数: target 和 port")
+            return ToolResult(
+                success=False, 
+                output="", 
+                error="缺少必需参数: target 和 port。支持格式: target='127.0.0.1', port=80 或 args='127.0.0.1 80'"
+            )
         
         cmd = ["nc", "-vz", "-w", str(timeout), target, str(port)]
         

@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import ScanList from './pages/ScanList'
 import ScanDetail from './pages/ScanDetail'
 import NewScan from './pages/NewScan'
 import Knowledgebase from './pages/Knowledgebase'
@@ -12,6 +13,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<Dashboard />} />
+        <Route path="scans" element={<ScanList />} />
         <Route path="scans/:scanId" element={<ScanDetail />} />
         <Route path="new-scan" element={<NewScan />} />
         <Route path="knowledgebase" element={<Knowledgebase />} />

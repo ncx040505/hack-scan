@@ -1,0 +1,88 @@
+# Nmap 7.95 scan initiated Sat Apr  4 05:35:24 2026 as: nmap -p 22,53,80,443 -sV -sC --script ssh2-enum-algos,ssh-hostkey,ssh-auth-methods,dns-recursion,dns-nsid,http-title,http-headers,http-methods,http-enum,http-robots.txt,ssl-cert,ssl-enum-ciphers -Pn -T3 -oN nmap_10.0.5.1_services.txt 10.0.5.1
+Nmap scan report for 10.0.5.1
+Host is up (0.00039s latency).
+
+PORT    STATE SERVICE  VERSION
+22/tcp  open  ssh      Dropbear sshd (protocol 2.0)
+| ssh2-enum-algos: 
+|   kex_algorithms: (7)
+|       sntrup761x25519-sha512
+|       sntrup761x25519-sha512@openssh.com
+|       curve25519-sha256
+|       curve25519-sha256@libssh.org
+|       diffie-hellman-group14-sha256
+|       kexguess2@matt.ucc.asn.au
+|       kex-strict-s-v00@openssh.com
+|   server_host_key_algorithms: (3)
+|       ssh-ed25519
+|       ecdsa-sha2-nistp256
+|       rsa-sha2-256
+|   encryption_algorithms: (3)
+|       chacha20-poly1305@openssh.com
+|       aes256-ctr
+|       aes128-ctr
+|   mac_algorithms: (1)
+|       hmac-sha2-256
+|   compression_algorithms: (1)
+|_      none
+| ssh-auth-methods: 
+|   Supported authentication methods: 
+|     publickey
+|_    password
+53/tcp  open  domain   Cloudflare public DNS
+80/tcp  open  http     OpenWrt uHTTPd
+| http-headers: 
+|   Connection: close
+|   ETag: "8d4-298-69cdeaec"
+|   Last-Modified: Thu, 02 Apr 2026 04:05:00 GMT
+|   Date: Sat, 04 Apr 2026 05:35:36 GMT
+|   Content-Type: text/html
+|   Content-Length: 664
+|   
+|_  (Request type: HEAD)
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-title: Site doesn't have a title (text/html).
+443/tcp open  ssl/http OpenWrt uHTTPd
+| ssl-cert: Subject: commonName=ImmortalWrt/organizationName=OpenWrt111ccb53/stateOrProvinceName=Somewhere/countryName=ZZ
+| Subject Alternative Name: DNS:ImmortalWrt
+| Issuer: commonName=ImmortalWrt/organizationName=OpenWrt111ccb53/stateOrProvinceName=Somewhere/countryName=ZZ
+| Public Key type: ec
+| Public Key bits: 256
+| Signature Algorithm: ecdsa-with-SHA256
+| Not valid before: 2025-12-10T06:04:08
+| Not valid after:  2027-12-10T06:04:08
+| MD5:   eaaa:8911:ddd2:84c4:4866:0cf2:148a:4b33
+|_SHA-1: 8ea5:c5da:31be:dd22:b78f:74c7:735f:a05c:6c33:020a
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+| ssl-enum-ciphers: 
+|   TLSv1.2: 
+|     ciphers: 
+|       TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|     compressors: 
+|       NULL
+|     cipher preference: server
+|   TLSv1.3: 
+|     ciphers: 
+|       TLS_AKE_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_AKE_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_AKE_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|     cipher preference: server
+|_  least strength: A
+| http-headers: 
+|   Connection: close
+|   ETag: "8d4-298-69cdeaec"
+|   Last-Modified: Thu, 02 Apr 2026 04:05:00 GMT
+|   Date: Sat, 04 Apr 2026 05:35:36 GMT
+|   Content-Type: text/html
+|   Content-Length: 664
+|   
+|_  (Request type: HEAD)
+|_http-title: Site doesn't have a title (text/html).
+Service Info: OS: Linux; Device: WAP; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Sat Apr  4 05:38:40 2026 -- 1 IP address (1 host up) scanned in 196.98 seconds

@@ -1,14 +1,14 @@
 """Scan API endpoints"""
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from loguru import logger
 
 from app.core.database import get_db, get_mongo_db, get_redis
 from app.core.scan_logger import get_scan_logger
-from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel
+from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, ScanChatMessage
 from app.schemas.scan import (
     ScanTaskCreate, ScanTaskResponse, ScanTaskList,
     VulnerabilityResponse, VulnerabilityList, ScanProgressResponse,
@@ -270,6 +270,106 @@ async def get_scan_vulnerabilities(
     )
 
 
+@router.get("/{scan_id}/attack-path")
+async def get_attack_path(
+    scan_id: str,
+    refresh: bool = Query(False, description="强制重新生成攻击路径分析"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取扫描任务的攻击路径分析"""
+    from llm.analyzer import get_analyzer
+    
+    # 获取扫描任务
+    result = await db.execute(
+        select(ScanTask).where(ScanTask.id == scan_id)
+    )
+    task = result.scalar_one_or_none()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Scan task not found")
+    
+    # 如果已有缓存且不需要刷新，直接返回
+    if task.attack_path_analysis and not refresh:
+        return {
+            "success": True,
+            "cached": True,
+            "data": task.attack_path_analysis
+        }
+    
+    # 获取漏洞列表
+    vuln_result = await db.execute(
+        select(Vulnerability).where(Vulnerability.scan_task_id == scan_id)
+    )
+    vulns = vuln_result.scalars().all()
+    
+    if not vulns:
+        return {
+            "success": True,
+            "cached": False,
+            "data": {
+                "phases": [],
+                "attack_chains": [],
+                "risk_assessment": {
+                    "overall_risk": "low",
+                    "risk_score": 0,
+                    "summary": "未发现漏洞",
+                    "critical_paths": [],
+                    "recommendations": ["继续保持良好的安全实践"]
+                }
+            }
+        }
+    
+    # 分离端口信息和漏洞信息
+    open_ports = []
+    vulnerabilities = []
+    
+    for v in vulns:
+        vuln_dict = {
+            "id": v.id,
+            "name": v.name,
+            "severity": v.severity.value if hasattr(v.severity, 'value') else str(v.severity),
+            "category": v.category,
+            "description": v.description,
+            "location": v.location,
+            "evidence": v.evidence,
+            "llm_analysis": v.llm_analysis,
+        }
+        
+        if v.name.startswith("Open port:"):
+            open_ports.append(vuln_dict)
+        else:
+            vulnerabilities.append(vuln_dict)
+    
+    # 调用 LLM 分析
+    try:
+        analyzer = get_analyzer()
+        analysis_result = await analyzer.analyze_attack_path(
+            target=task.target,
+            vulnerabilities=vulnerabilities,
+            open_ports=open_ports
+        )
+        
+        # 转换为字典
+        result_dict = analysis_result.model_dump()
+        
+        # 保存到数据库
+        task.attack_path_analysis = result_dict
+        await db.commit()
+        
+        return {
+            "success": True,
+            "cached": False,
+            "data": result_dict
+        }
+        
+    except Exception as e:
+        logger.error(f"Attack path analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"攻击路径分析失败: {str(e)}"
+        )
+
+
 @router.post("/{scan_id}/cancel")
 async def cancel_scan(
     scan_id: str,
@@ -335,6 +435,14 @@ async def delete_scan(
         Vulnerability.__table__.delete().where(Vulnerability.scan_task_id == scan_id)
     )
     
+    # 删除关联的对话消息
+    await db.execute(
+        ScanMessage.__table__.delete().where(ScanMessage.scan_task_id == scan_id)
+    )
+    await db.execute(
+        ScanChatMessage.__table__.delete().where(ScanChatMessage.scan_task_id == scan_id)
+    )
+    
     # 删除扫描任务
     await db.delete(task)
     await db.commit()
@@ -349,6 +457,77 @@ async def delete_scan(
     logger.info(f"Scan task deleted: {scan_id}")
     
     return {"message": "扫描已删除", "scan_id": scan_id}
+
+
+@router.post("/batch-delete")
+async def batch_delete_scans(
+    scan_ids: list[str] = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """批量删除扫描任务"""
+    if not scan_ids:
+        raise HTTPException(status_code=400, detail="未提供扫描任务ID")
+    
+    deleted_count = 0
+    failed_count = 0
+    failed_ids = []
+    
+    for scan_id in scan_ids:
+        try:
+            result = await db.execute(
+                select(ScanTask).where(ScanTask.id == scan_id)
+            )
+            task = result.scalar_one_or_none()
+            
+            if not task:
+                failed_count += 1
+                failed_ids.append({"id": scan_id, "reason": "任务不存在"})
+                continue
+            
+            if task.status in (ScanStatus.PENDING, ScanStatus.RUNNING):
+                failed_count += 1
+                failed_ids.append({"id": scan_id, "reason": "任务正在运行，请先取消"})
+                continue
+            
+            # 删除关联的漏洞
+            await db.execute(
+                Vulnerability.__table__.delete().where(Vulnerability.scan_task_id == scan_id)
+            )
+            
+            # 删除关联的对话消息
+            await db.execute(
+                ScanMessage.__table__.delete().where(ScanMessage.scan_task_id == scan_id)
+            )
+            await db.execute(
+                ScanChatMessage.__table__.delete().where(ScanChatMessage.scan_task_id == scan_id)
+            )
+            
+            # 删除扫描任务
+            await db.delete(task)
+            
+            # 清理 Redis 日志
+            scan_logger = get_scan_logger(scan_id)
+            try:
+                scan_logger.clear()
+            finally:
+                scan_logger.close()
+            
+            deleted_count += 1
+            logger.info(f"Scan task deleted in batch: {scan_id}")
+            
+        except Exception as e:
+            failed_count += 1
+            failed_ids.append({"id": scan_id, "reason": str(e)})
+            logger.error(f"Failed to delete scan {scan_id}: {e}")
+    
+    await db.commit()
+    
+    return {
+        "message": f"成功删除 {deleted_count} 个任务",
+        "deleted_count": deleted_count,
+        "failed_count": failed_count,
+        "failed_ids": failed_ids
+    }
 
 
 # ============ Scan Messages API ============
@@ -571,18 +750,23 @@ async def chat_about_scan(
         role = "用户" if msg.role == ChatRole.USER else "助手"
         chat_history.append(f"{role}: {msg.content}")
     
+    # 获取活跃的 LLM 配置
+    from app.api.settings import get_active_llm_config
+    db_config = await get_active_llm_config(db)
+    
+    if not db_config:
+        raise HTTPException(status_code=503, detail="LLM 配置未设置，请在设置中配置 LLM")
+    
     # 调用 LLM 回答问题
     from langchain_openai import ChatOpenAI
     from langchain_core.prompts import ChatPromptTemplate
-    from app.core.config import get_settings
-    
-    settings = get_settings()
     
     llm = ChatOpenAI(
-        model=settings.llm_model,
+        model=db_config.model,
         temperature=0.7,
-        api_key=settings.openai_api_key or None,
-        base_url=settings.openai_base_url,
+        api_key=db_config.api_key,
+        base_url=db_config.api_base_url,
+        max_tokens=db_config.max_tokens,
     )
     
     prompt = ChatPromptTemplate.from_messages([

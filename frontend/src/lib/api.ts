@@ -90,6 +90,11 @@ export async function deleteScan(scanId: string) {
   return data
 }
 
+export async function batchDeleteScans(scanIds: string[]) {
+  const { data } = await api.post('/scans/batch-delete', { scan_ids: scanIds })
+  return data
+}
+
 export interface ScanProgress {
   scan_id: string
   status: string
@@ -119,6 +124,65 @@ export interface ScanLogs {
 export async function getScanLogs(scanId: string, sinceIndex: number = 0) {
   const { data } = await api.get<ScanLogs>(`/scans/${scanId}/logs`, {
     params: { since_index: sinceIndex }
+  })
+  return data
+}
+
+// ============ Attack Path Analysis ============
+
+export interface AttackPathItem {
+  id: string
+  name: string
+  severity?: string
+  details?: string
+}
+
+export interface AttackPhase {
+  id: string
+  name: string
+  description: string
+  items: AttackPathItem[]
+}
+
+export interface AttackChainStep {
+  order: number
+  action: string
+  vulnerability?: string
+  result: string
+}
+
+export interface AttackChain {
+  id: string
+  name: string
+  description: string
+  steps: AttackChainStep[]
+  likelihood: string
+  impact: string
+}
+
+export interface RiskAssessment {
+  overall_risk: string
+  risk_score: number
+  summary: string
+  critical_paths: string[]
+  recommendations: string[]
+}
+
+export interface AttackPathData {
+  phases: AttackPhase[]
+  attack_chains: AttackChain[]
+  risk_assessment: RiskAssessment
+}
+
+export interface AttackPathResponse {
+  success: boolean
+  cached: boolean
+  data: AttackPathData
+}
+
+export async function getAttackPath(scanId: string, refresh: boolean = false) {
+  const { data } = await api.get<AttackPathResponse>(`/scans/${scanId}/attack-path`, {
+    params: { refresh }
   })
   return data
 }
@@ -202,7 +266,7 @@ export interface SecurityTool {
   updated_at: string | null
 }
 
-export async function getTools(params?: { 
+export async function getTools(params?: {
   skip?: number
   limit?: number
   tool_type?: string
@@ -314,6 +378,30 @@ export async function activateLLMConfig(id: string) {
 export async function testLLMConfig(id: string) {
   const { data } = await api.post<{ success: boolean; message: string; response?: string; error?: string }>(
     `/settings/llm/${id}/test`
+  )
+  return data
+}
+
+export interface LLMModel {
+  id: string
+  owned_by: string
+  created?: number
+}
+
+export interface FetchModelsResponse {
+  success: boolean
+  message: string
+  models: LLMModel[]
+}
+
+export async function fetchLLMModels(apiKey?: string, apiBaseUrl?: string, configId?: string) {
+  const { data } = await api.post<FetchModelsResponse>(
+    `/settings/llm/fetch-models`,
+    {
+      api_key: apiKey || null,
+      api_base_url: apiBaseUrl || null,
+      config_id: configId || null,
+    }
   )
   return data
 }

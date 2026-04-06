@@ -10,6 +10,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - scanner_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -23,12 +25,16 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    networks:
+      - scanner_network
 
   # Redis
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - scanner_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -46,6 +52,7 @@ services:
       - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
       - MONGODB_URL=mongodb://mongodb:27017
       - REDIS_URL=redis://redis:6379/0
+      - KALI_SCANNER_URL=http://kali_scanner:8888
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,9 +60,13 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_started
+      kali_scanner:
+        condition: service_healthy
     volumes:
       - ../backend:/app
       - tools_data:/app/data/tools
+    networks:
+      - scanner_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,14 +80,43 @@ services:
       - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
       - MONGODB_URL=mongodb://mongodb:27017
       - REDIS_URL=redis://redis:6379/0
+      - KALI_SCANNER_URL=http://kali_scanner:8888
     depends_on:
       - redis
       - postgres
       - mongodb
+      - kali_scanner
     volumes:
       - ../backend:/app
       - tools_data:/app/data/tools
+    networks:
+      - scanner_network
     command: celery -A tasks.celery_app worker --loglevel=info
+
+  # Kali Scanner Container
+  kali_scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile.kali
+    ports:
+      - "8888:8888"
+    volumes:
+      - kali_tools:/scanner/tools
+      - kali_output:/scanner/output
+      - kali_logs:/scanner/logs
+    networks:
+      - scanner_network
+    privileged: true  # 某些扫描工具需要特权模式（如 masscan）
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
   # Frontend (development)
   frontend:
@@ -92,8 +132,17 @@ services:
       - VITE_API_URL=/api/v1
     depends_on:
       - backend
+    networks:
+      - scanner_network
+
+networks:
+  scanner_network:
+    driver: bridge
 
 volumes:
   postgres_data:
   mongodb_data:
   tools_data:
+  kali_tools:
+  kali_output:
+  kali_logs:

@@ -1,12 +1,522 @@
-# Nmap 7.95 scan initiated Thu Apr  2 08:05:51 2026 as: nmap -Pn -p 5000,5001 -sC -sV --reason --script http-title,http-headers,http-methods,http-enum,ssl-cert,ssl-enum-ciphers -oN nmap_5000_5001_10.0.5.210.txt 10.0.5.210
+# Nmap 7.95 scan initiated Thu Apr  2 17:37:37 2026 as: nmap -Pn -n -p 5000,5001,8000,8080,8443 -sV --script http-title,http-headers,http-methods,http-enum -oN nmap_web_extra_10.0.5.210.txt 10.0.5.210
 Nmap scan report for 10.0.5.210
-Host is up, received user-set (0.00024s latency).
+Host is up (0.00027s latency).
 
-PORT     STATE SERVICE  REASON         VERSION
-5000/tcp open  http     syn-ack ttl 63 nginx
+PORT     STATE  SERVICE    VERSION
+5000/tcp open   http       nginx
+|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
 | http-headers: 
 |   Server: nginx
-|   Date: Thu, 02 Apr 2026 08:06:03 GMT
+|   Date: Thu, 02 Apr 2026 17:37:48 GMT
+|   Content-Type: text/html
+|   Content-Length: 2173
+|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
+|   Connection: close
+|   Vary: Accept-Encoding
+|   ETag: "69c8d9a9-87d"
+|   cache-control: no-store
+|   Accept-Ranges: bytes
+|   
+|_  (Request type: HEAD)
+| http-methods: 
+|_  Supported Methods: GET HEAD
+| http-enum: 
+|   /cgi-bin/mj_wwwusr: Majordomo2 Mailing List
+|   /cgi-bin/vcs: Mitel Audio and Web Conferencing (AWC)
+|   /vbseo.php: vBSEO
+|   /phpbb/: Forum
+|   /panel-administracion/: Possible admin folder
+|   /panel-administracion/login.html: Possible admin folder
+|   /pages/admin/admin-login.php: Possible admin folder
+|   /pages/admin/admin-login.html: Possible admin folder
+|   /panel-administracion/admin.html: Possible admin folder
+|   /panel-administracion/login.php: Possible admin folder
+|   /panel-administracion/index.php: Possible admin folder
+|   /panel-administracion/admin.php: Possible admin folder
+|   /panel-administracion/login.cfm: Possible admin folder
+|   /pages/admin/admin-login.cfm: Possible admin folder
+|   /panel-administracion/admin.cfm: Possible admin folder
+|   /panel-administracion/index.cfm: Possible admin folder
+|   /pages/admin/admin-login.asp: Possible admin folder
+|   /panel-administracion/login.asp: Possible admin folder
+|   /panel-administracion/index.asp: Possible admin folder
+|   /panel-administracion/admin.asp: Possible admin folder
+|   /pages/admin/admin-login.aspx: Possible admin folder
+|   /panel-administracion/login.aspx: Possible admin folder
+|   /panel-administracion/index.aspx: Possible admin folder
+|   /panel-administracion/admin.aspx: Possible admin folder
+|   /pages/admin/admin-login.jsp: Possible admin folder
+|   /panel-administracion/login.jsp: Possible admin folder
+|   /panel-administracion/index.jsp: Possible admin folder
+|   /panel-administracion/admin.jsp: Possible admin folder
+|   /pec_admin/: Possible admin folder
+|   /plog-admin/: Possible admin folder
+|   /robots.txt: Robots file
+|   /cgi-bin/ffileman.cgi?: Ffileman Web File Manager
+|   /phpinfo.php: Possible information file
+|   /plus/lurking.php: phpMyChat Plus
+|   /vhosts/ehcp/?op=applyforftpaccount: Easy Hosting Control Panel
+|   /vhosts/ehcp/?op=applyforaccount: Easy Hosting Control Panel
+|   /vhosts/ehcp/?op=applyfordomainaccount: Easy Hosting Control Panel
+|   /piranha/secure/passwd.php3: RedHat Piranha Virtual Server
+|   /cgi-bin/ck/mimencode: ContentKeeper Web Appliance
+|   /cgi-bin/masterCGI?: Alcatel-Lucent OmniPCX Enterprise
+|   /cgi-mod/view_help.cgi: Barracuda Networks Spam & Virus Firewall
+|   /cgi-mod/index.cgi: Barracuda Web Application Firewall
+|   /cgi-mod/smtp_test.cgi: Barracuda IM Firewall
+|   /private/sdc.tgz: IBM Bladecenter Management Logs
+|   /cgi-bin/awstats.pl: AWStats
+|   /partymgr/: Apache OFBiz
+|   /picts/BC_bwlogorev.gif: BlueCoat Reporter
+|   /picts/menu_leaf.gif: BlueCoat Reporter
+|   /vpn/images/AccessGateway.ico: Citrix
+|   /cgi-bin/image/shikaku2.png: TeraStation PRO RAID 0/1/5 Network Attached Storage
+|   /pictures/buttons/file_view_mark.gif: AXIS StorPoint
+|   /printer/image: Lexmark Printer
+|   /view/index.shtml: Axis 212 PTZ Network Camera
+|   /phpmyadmin/: phpMyAdmin
+|   /phpMyAdmin/: phpMyAdmin
+|   /pma/: phpMyAdmin
+|   /php-my-admin/: phpMyAdmin
+|   /phpMyAdmin2/: phpMyAdmin
+|   /phpMyAdmin-2/: phpMyAdmin
+|   /phpMyAdmin-2.2.3/: phpMyAdmin
+|   /phpMyAdmin-2.2.6/: phpMyAdmin
+|   /phpMyAdmin-2.5.1/: phpMyAdmin
+|   /phpMyAdmin-2.5.4/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.5.5/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.5.6-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.5.6-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.5.6/: phpMyAdmin
+|   /phpMyAdmin-2.5.7/: phpMyAdmin
+|   /phpMyAdmin-2.5.7-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-alpha/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-alpha2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-beta2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc3/: phpMyAdmin
+|   /phpMyAdmin-2.6.0/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.6.1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.6.2/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.3/: phpMyAdmin
+|   /phpMyAdmin-2.6.3-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.3-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl4/: phpMyAdmin
+|   /phpMyAdmin-2.6.4/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.7.0/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.8.0/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.2/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.3/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.4/: phpMyAdmin
+|   /phpMyAdmin-2.8.1-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.8.1/: phpMyAdmin
+|   /phpMyAdmin-2.8.2/: phpMyAdmin
+|   /php-myadmin/: phpMyAdmin
+|   /phpmy-admin/: phpMyAdmin
+|   /perweb.nsf: Lotus Domino
+|   /vpuserinfo.nsf: Lotus Domino
+|   /pages/categoryresults.aspx: MS Sharepoint
+|   /projectserver/Home/HomePage.asp: MS Project Server
+|   /projectserver/images/branding.gif: MS Project Server
+|   /projectserver/images/pgHome.gif: MS Project Server
+|   /projectserver/images/pgTask.gif: MS Project Server
+|   /projectserver/Tasks/Taskspage.asp: MS Project Server
+|   /postinfo.html: Frontpage file or folder
+|   /plugins/PluginController.php?path=..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fwindows%2fwin.ini%00: OrangeHRM 2.6.3 Local File Inclusion 
+|   /cgi-bin/export_debug_msg.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
+|   /cgi-bin/config.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
+|   /pligg/readme.html: Interesting, a readme.
+|   /pages/indexheader.php: Green Pants CMS
+|   /pages/searcher.php: Green Pants CMS
+|   /pages/indexviewentry.php: Green Pants CMS
+|   /photogallery_open.php: Heaven Soft CMS
+|   /vb/bnnr.php: vBulletin ads_saed
+|   /pix/moodlelogo.gif: Moodle files
+|   /p/: Potentially interesting folder
+|   /s/: Potentially interesting folder
+|   /v/: Potentially interesting folder
+|   /cgi-914/: Potentially interesting folder
+|   /cgi-915/: Potentially interesting folder
+|   /cgi-auth/: Potentially interesting folder
+|   /cgi-bin2/: Potentially interesting folder
+|   /cgi-bin/: Potentially interesting folder
+|   /cgibin/: Potentially interesting folder
+|   /cgi.cgi/: Potentially interesting folder
+|   /cgi-csc/: Potentially interesting folder
+|   /cgi-exe/: Potentially interesting folder
+|   /cgi/: Potentially interesting folder
+|   /cgi-home/: Potentially interesting folder
+|   /cgi-lib/: Potentially interesting folder
+|   /cgilib/: Potentially interesting folder
+|   /cgi-local/: Potentially interesting folder
+|   /cgi-perl/: Potentially interesting folder
+|   /cgi-scripts/: Potentially interesting folder
+|   /cgiscripts/: Potentially interesting folder
+|   /cgis/: Potentially interesting folder
+|   /cgi-shl/: Potentially interesting folder
+|   /cgi-shop/: Potentially interesting folder
+|   /cgi-sys/: Potentially interesting folder
+|   /cgi-weddico/: Potentially interesting folder
+|   /cgi-win/: Potentially interesting folder
+|   /cgiwin/: Potentially interesting folder
+|   /page/: Potentially interesting folder
+|   /pages/: Potentially interesting folder
+|   /partner/: Potentially interesting folder
+|   /partners/: Potentially interesting folder
+|   /passport/: Potentially interesting folder
+|   /password/: Potentially interesting folder
+|   /passwords/: Potentially interesting folder
+|   /path/: Potentially interesting folder
+|   /payment/: Potentially interesting folder
+|   /payments/: Potentially interesting folder
+|   /pccsmysqladm/: Potentially interesting folder
+|   /perl5/: Potentially interesting folder
+|   /perl/: Potentially interesting folder
+|   /personal/: Potentially interesting folder
+|   /pforum/: Potentially interesting folder
+|   /phorum/: Potentially interesting folder
+|   /phpBB/: Potentially interesting folder
+|   /php_classes/: Potentially interesting folder
+|   /phpclassifieds/: Potentially interesting folder
+|   /php/: Potentially interesting folder
+|   /phpimageview/: Potentially interesting folder
+|   /phpnuke/: Potentially interesting folder
+|   /phpPhotoAlbum/: Potentially interesting folder
+|   /phpprojekt/: Potentially interesting folder
+|   /phpSecurePages/: Potentially interesting folder
+|   /pics/: Potentially interesting folder
+|   /pictures/: Potentially interesting folder
+|   /pike/: Potentially interesting folder
+|   /piranha/: Potentially interesting folder
+|   /pls/: Potentially interesting folder
+|   /plsql/: Potentially interesting folder
+|   /plssampleadmin_/: Potentially interesting folder
+|   /plssampleadmin/: Potentially interesting folder
+|   /plssampleadmin_help/: Potentially interesting folder
+|   /plssample/: Potentially interesting folder
+|   /poll/: Potentially interesting folder
+|   /polls/: Potentially interesting folder
+|   /porn/: Potentially interesting folder
+|   /portal/: Potentially interesting folder
+|   /portals/: Potentially interesting folder
+|   /postgres/: Potentially interesting folder
+|   /postnuke/: Potentially interesting folder
+|   /ppwb/: Potentially interesting folder
+|   /printer/: Potentially interesting folder
+|   /printers/: Potentially interesting folder
+|   /privacy/: Potentially interesting folder
+|   /privado/: Potentially interesting folder
+|   /private/: Potentially interesting folder
+|   /priv/: Potentially interesting folder
+|   /prod/: Potentially interesting folder
+|   /projectserver/: Potentially interesting folder
+|   /protected/: Potentially interesting folder
+|   /proxy/: Potentially interesting folder
+|   /prueba/: Potentially interesting folder
+|   /pruebas/: Potentially interesting folder
+|   /prv/: Potentially interesting folder
+|   /pub/: Potentially interesting folder
+|   /public/: Potentially interesting folder
+|   /publica/: Potentially interesting folder
+|   /publicar/: Potentially interesting folder
+|   /publico/: Potentially interesting folder
+|   /publish/: Potentially interesting folder
+|   /purchase/: Potentially interesting folder
+|   /purchases/: Potentially interesting folder
+|   /pw/: Potentially interesting folder
+|   /python/: Potentially interesting folder
+|   /vendor/: Potentially interesting folder
+|   /vfs/: Potentially interesting folder
+|   /view/: Potentially interesting folder
+|   /vpn/: Potentially interesting folder
+|_  /vti_txt/: Potentially interesting folder
+5001/tcp open   ssl/http   nginx
+| http-methods: 
+|_  Supported Methods: GET HEAD
+| http-headers: 
+|   Server: nginx
+|   Date: Thu, 02 Apr 2026 17:37:48 GMT
+|   Content-Type: text/html
+|   Content-Length: 2173
+|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
+|   Connection: close
+|   Vary: Accept-Encoding
+|   ETag: "69c8d9a9-87d"
+|   cache-control: no-store
+|   Accept-Ranges: bytes
+|   
+|_  (Request type: HEAD)
+|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
+| http-enum: 
+|   /cgi-bin/mj_wwwusr: Majordomo2 Mailing List
+|   /cgi-bin/vcs: Mitel Audio and Web Conferencing (AWC)
+|   /vbseo.php: vBSEO
+|   /phpbb/: Forum
+|   /panel-administracion/: Possible admin folder
+|   /panel-administracion/login.html: Possible admin folder
+|   /pages/admin/admin-login.php: Possible admin folder
+|   /pages/admin/admin-login.html: Possible admin folder
+|   /panel-administracion/admin.html: Possible admin folder
+|   /panel-administracion/login.php: Possible admin folder
+|   /panel-administracion/index.php: Possible admin folder
+|   /panel-administracion/admin.php: Possible admin folder
+|   /panel-administracion/login.cfm: Possible admin folder
+|   /pages/admin/admin-login.cfm: Possible admin folder
+|   /panel-administracion/admin.cfm: Possible admin folder
+|   /panel-administracion/index.cfm: Possible admin folder
+|   /pages/admin/admin-login.asp: Possible admin folder
+|   /panel-administracion/login.asp: Possible admin folder
+|   /panel-administracion/index.asp: Possible admin folder
+|   /panel-administracion/admin.asp: Possible admin folder
+|   /pages/admin/admin-login.aspx: Possible admin folder
+|   /panel-administracion/login.aspx: Possible admin folder
+|   /panel-administracion/index.aspx: Possible admin folder
+|   /panel-administracion/admin.aspx: Possible admin folder
+|   /pages/admin/admin-login.jsp: Possible admin folder
+|   /panel-administracion/login.jsp: Possible admin folder
+|   /panel-administracion/index.jsp: Possible admin folder
+|   /panel-administracion/admin.jsp: Possible admin folder
+|   /pec_admin/: Possible admin folder
+|   /plog-admin/: Possible admin folder
+|   /robots.txt: Robots file
+|   /cgi-bin/ffileman.cgi?: Ffileman Web File Manager
+|   /phpinfo.php: Possible information file
+|   /plus/lurking.php: phpMyChat Plus
+|   /vhosts/ehcp/?op=applyforftpaccount: Easy Hosting Control Panel
+|   /vhosts/ehcp/?op=applyforaccount: Easy Hosting Control Panel
+|   /vhosts/ehcp/?op=applyfordomainaccount: Easy Hosting Control Panel
+|   /piranha/secure/passwd.php3: RedHat Piranha Virtual Server
+|   /cgi-bin/ck/mimencode: ContentKeeper Web Appliance
+|   /cgi-bin/masterCGI?: Alcatel-Lucent OmniPCX Enterprise
+|   /cgi-mod/view_help.cgi: Barracuda Networks Spam & Virus Firewall
+|   /cgi-mod/index.cgi: Barracuda Web Application Firewall
+|   /cgi-mod/smtp_test.cgi: Barracuda IM Firewall
+|   /private/sdc.tgz: IBM Bladecenter Management Logs
+|   /cgi-bin/awstats.pl: AWStats
+|   /partymgr/: Apache OFBiz
+|   /picts/BC_bwlogorev.gif: BlueCoat Reporter
+|   /picts/menu_leaf.gif: BlueCoat Reporter
+|   /vpn/images/AccessGateway.ico: Citrix
+|   /cgi-bin/image/shikaku2.png: TeraStation PRO RAID 0/1/5 Network Attached Storage
+|   /pictures/buttons/file_view_mark.gif: AXIS StorPoint
+|   /printer/image: Lexmark Printer
+|   /view/index.shtml: Axis 212 PTZ Network Camera
+|   /phpmyadmin/: phpMyAdmin
+|   /phpMyAdmin/: phpMyAdmin
+|   /pma/: phpMyAdmin
+|   /php-my-admin/: phpMyAdmin
+|   /phpMyAdmin2/: phpMyAdmin
+|   /phpMyAdmin-2/: phpMyAdmin
+|   /phpMyAdmin-2.2.3/: phpMyAdmin
+|   /phpMyAdmin-2.2.6/: phpMyAdmin
+|   /phpMyAdmin-2.5.1/: phpMyAdmin
+|   /phpMyAdmin-2.5.4/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.5.5/: phpMyAdmin
+|   /phpMyAdmin-2.5.5-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.5.6-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.5.6-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.5.6/: phpMyAdmin
+|   /phpMyAdmin-2.5.7/: phpMyAdmin
+|   /phpMyAdmin-2.5.7-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-alpha/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-alpha2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-beta2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-rc3/: phpMyAdmin
+|   /phpMyAdmin-2.6.0/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.0-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.6.1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.1-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.6.2/: phpMyAdmin
+|   /phpMyAdmin-2.6.2-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.3/: phpMyAdmin
+|   /phpMyAdmin-2.6.3-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.3-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl3/: phpMyAdmin
+|   /phpMyAdmin-2.6.4-pl4/: phpMyAdmin
+|   /phpMyAdmin-2.6.4/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-pl1/: phpMyAdmin
+|   /phpMyAdmin-2.7.0-pl2/: phpMyAdmin
+|   /phpMyAdmin-2.7.0/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-beta1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0-rc2/: phpMyAdmin
+|   /phpMyAdmin-2.8.0/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.1/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.2/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.3/: phpMyAdmin
+|   /phpMyAdmin-2.8.0.4/: phpMyAdmin
+|   /phpMyAdmin-2.8.1-rc1/: phpMyAdmin
+|   /phpMyAdmin-2.8.1/: phpMyAdmin
+|   /phpMyAdmin-2.8.2/: phpMyAdmin
+|   /php-myadmin/: phpMyAdmin
+|   /phpmy-admin/: phpMyAdmin
+|   /perweb.nsf: Lotus Domino
+|   /vpuserinfo.nsf: Lotus Domino
+|   /pages/categoryresults.aspx: MS Sharepoint
+|   /projectserver/Home/HomePage.asp: MS Project Server
+|   /projectserver/images/branding.gif: MS Project Server
+|   /projectserver/images/pgHome.gif: MS Project Server
+|   /projectserver/images/pgTask.gif: MS Project Server
+|   /projectserver/Tasks/Taskspage.asp: MS Project Server
+|   /postinfo.html: Frontpage file or folder
+|   /plugins/PluginController.php?path=..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fwindows%2fwin.ini%00: OrangeHRM 2.6.3 Local File Inclusion 
+|   /cgi-bin/export_debug_msg.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
+|   /cgi-bin/config.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
+|   /pligg/readme.html: Interesting, a readme.
+|   /pages/indexheader.php: Green Pants CMS
+|   /pages/searcher.php: Green Pants CMS
+|   /pages/indexviewentry.php: Green Pants CMS
+|   /photogallery_open.php: Heaven Soft CMS
+|   /vb/bnnr.php: vBulletin ads_saed
+|   /pix/moodlelogo.gif: Moodle files
+|   /p/: Potentially interesting folder
+|   /s/: Potentially interesting folder
+|   /v/: Potentially interesting folder
+|   /cgi-914/: Potentially interesting folder
+|   /cgi-915/: Potentially interesting folder
+|   /cgi-auth/: Potentially interesting folder
+|   /cgi-bin2/: Potentially interesting folder
+|   /cgi-bin/: Potentially interesting folder
+|   /cgibin/: Potentially interesting folder
+|   /cgi.cgi/: Potentially interesting folder
+|   /cgi-csc/: Potentially interesting folder
+|   /cgi-exe/: Potentially interesting folder
+|   /cgi/: Potentially interesting folder
+|   /cgi-home/: Potentially interesting folder
+|   /cgi-lib/: Potentially interesting folder
+|   /cgilib/: Potentially interesting folder
+|   /cgi-local/: Potentially interesting folder
+|   /cgi-perl/: Potentially interesting folder
+|   /cgi-scripts/: Potentially interesting folder
+|   /cgiscripts/: Potentially interesting folder
+|   /cgis/: Potentially interesting folder
+|   /cgi-shl/: Potentially interesting folder
+|   /cgi-shop/: Potentially interesting folder
+|   /cgi-sys/: Potentially interesting folder
+|   /cgi-weddico/: Potentially interesting folder
+|   /cgi-win/: Potentially interesting folder
+|   /cgiwin/: Potentially interesting folder
+|   /page/: Potentially interesting folder
+|   /pages/: Potentially interesting folder
+|   /partner/: Potentially interesting folder
+|   /partners/: Potentially interesting folder
+|   /passport/: Potentially interesting folder
+|   /password/: Potentially interesting folder
+|   /passwords/: Potentially interesting folder
+|   /path/: Potentially interesting folder
+|   /payment/: Potentially interesting folder
+|   /payments/: Potentially interesting folder
+|   /pccsmysqladm/: Potentially interesting folder
+|   /perl5/: Potentially interesting folder
+|   /perl/: Potentially interesting folder
+|   /personal/: Potentially interesting folder
+|   /pforum/: Potentially interesting folder
+|   /phorum/: Potentially interesting folder
+|   /phpBB/: Potentially interesting folder
+|   /php_classes/: Potentially interesting folder
+|   /phpclassifieds/: Potentially interesting folder
+|   /php/: Potentially interesting folder
+|   /phpimageview/: Potentially interesting folder
+|   /phpnuke/: Potentially interesting folder
+|   /phpPhotoAlbum/: Potentially interesting folder
+|   /phpprojekt/: Potentially interesting folder
+|   /phpSecurePages/: Potentially interesting folder
+|   /pics/: Potentially interesting folder
+|   /pictures/: Potentially interesting folder
+|   /pike/: Potentially interesting folder
+|   /piranha/: Potentially interesting folder
+|   /pls/: Potentially interesting folder
+|   /plsql/: Potentially interesting folder
+|   /plssampleadmin_/: Potentially interesting folder
+|   /plssampleadmin/: Potentially interesting folder
+|   /plssampleadmin_help/: Potentially interesting folder
+|   /plssample/: Potentially interesting folder
+|   /poll/: Potentially interesting folder
+|   /polls/: Potentially interesting folder
+|   /porn/: Potentially interesting folder
+|   /portal/: Potentially interesting folder
+|   /portals/: Potentially interesting folder
+|   /postgres/: Potentially interesting folder
+|   /postnuke/: Potentially interesting folder
+|   /ppwb/: Potentially interesting folder
+|   /printer/: Potentially interesting folder
+|   /printers/: Potentially interesting folder
+|   /privacy/: Potentially interesting folder
+|   /privado/: Potentially interesting folder
+|   /private/: Potentially interesting folder
+|   /priv/: Potentially interesting folder
+|   /prod/: Potentially interesting folder
+|   /projectserver/: Potentially interesting folder
+|   /protected/: Potentially interesting folder
+|   /proxy/: Potentially interesting folder
+|   /prueba/: Potentially interesting folder
+|   /pruebas/: Potentially interesting folder
+|   /prv/: Potentially interesting folder
+|   /pub/: Potentially interesting folder
+|   /public/: Potentially interesting folder
+|   /publica/: Potentially interesting folder
+|   /publicar/: Potentially interesting folder
+|   /publico/: Potentially interesting folder
+|   /publish/: Potentially interesting folder
+|   /purchase/: Potentially interesting folder
+|   /purchases/: Potentially interesting folder
+|   /pw/: Potentially interesting folder
+|   /python/: Potentially interesting folder
+|   /vendor/: Potentially interesting folder
+|   /vfs/: Potentially interesting folder
+|   /view/: Potentially interesting folder
+|   /vpn/: Potentially interesting folder
+|_  /vti_txt/: Potentially interesting folder
+8000/tcp open   http       nginx
+| http-headers: 
+|   Server: nginx
+|   Date: Thu, 02 Apr 2026 17:37:48 GMT
 |   Content-Type: text/html
 |   Content-Length: 2173
 |   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
@@ -258,299 +768,8 @@ PORT     STATE SERVICE  REASON         VERSION
 |   /view/: Potentially interesting folder
 |   /vpn/: Potentially interesting folder
 |_  /vti_txt/: Potentially interesting folder
-5001/tcp open  ssl/http syn-ack ttl 63 nginx
-|_http-title: \xE9\xA3\x9E\xE7\x89\x9B fnOS
-| ssl-cert: Subject: commonName=fnOS/organizationName=fnOS
-| Subject Alternative Name: DNS:fnOS
-| Issuer: commonName=fnOS/organizationName=fnOS
-| Public Key type: ec
-| Public Key bits: 256
-| Signature Algorithm: ecdsa-with-SHA256
-| Not valid before: 2025-07-12T08:16:24
-| Not valid after:  2027-07-12T08:16:24
-| MD5:   2523:2b09:f711:a46b:e114:1c37:df81:0c7d
-|_SHA-1: 3ef4:577d:69dc:f15c:62f0:348a:2986:9d86:28c4:cc68
-| http-methods: 
-|_  Supported Methods: GET HEAD
-| ssl-enum-ciphers: 
-|   TLSv1.2: 
-|     ciphers: 
-|       TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_256_CCM (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_128_CCM (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256 (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA (ecdh_x25519) - A
-|       TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA (ecdh_x25519) - A
-|     compressors: 
-|       NULL
-|     cipher preference: server
-|   TLSv1.3: 
-|     ciphers: 
-|       TLS_AKE_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
-|       TLS_AKE_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
-|       TLS_AKE_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
-|     cipher preference: server
-|_  least strength: A
-| http-headers: 
-|   Server: nginx
-|   Date: Thu, 02 Apr 2026 08:06:03 GMT
-|   Content-Type: text/html
-|   Content-Length: 2173
-|   Last-Modified: Sun, 29 Mar 2026 07:50:01 GMT
-|   Connection: close
-|   Vary: Accept-Encoding
-|   ETag: "69c8d9a9-87d"
-|   cache-control: no-store
-|   Accept-Ranges: bytes
-|   
-|_  (Request type: HEAD)
-| http-enum: 
-|   /cgi-bin/mj_wwwusr: Majordomo2 Mailing List
-|   /cgi-bin/vcs: Mitel Audio and Web Conferencing (AWC)
-|   /vbseo.php: vBSEO
-|   /phpbb/: Forum
-|   /panel-administracion/: Possible admin folder
-|   /panel-administracion/login.html: Possible admin folder
-|   /pages/admin/admin-login.php: Possible admin folder
-|   /pages/admin/admin-login.html: Possible admin folder
-|   /panel-administracion/admin.html: Possible admin folder
-|   /panel-administracion/login.php: Possible admin folder
-|   /panel-administracion/index.php: Possible admin folder
-|   /panel-administracion/admin.php: Possible admin folder
-|   /panel-administracion/login.cfm: Possible admin folder
-|   /pages/admin/admin-login.cfm: Possible admin folder
-|   /panel-administracion/admin.cfm: Possible admin folder
-|   /panel-administracion/index.cfm: Possible admin folder
-|   /pages/admin/admin-login.asp: Possible admin folder
-|   /panel-administracion/login.asp: Possible admin folder
-|   /panel-administracion/index.asp: Possible admin folder
-|   /panel-administracion/admin.asp: Possible admin folder
-|   /pages/admin/admin-login.aspx: Possible admin folder
-|   /panel-administracion/login.aspx: Possible admin folder
-|   /panel-administracion/index.aspx: Possible admin folder
-|   /panel-administracion/admin.aspx: Possible admin folder
-|   /pages/admin/admin-login.jsp: Possible admin folder
-|   /panel-administracion/login.jsp: Possible admin folder
-|   /panel-administracion/index.jsp: Possible admin folder
-|   /panel-administracion/admin.jsp: Possible admin folder
-|   /pec_admin/: Possible admin folder
-|   /plog-admin/: Possible admin folder
-|   /robots.txt: Robots file
-|   /cgi-bin/ffileman.cgi?: Ffileman Web File Manager
-|   /phpinfo.php: Possible information file
-|   /plus/lurking.php: phpMyChat Plus
-|   /vhosts/ehcp/?op=applyforftpaccount: Easy Hosting Control Panel
-|   /vhosts/ehcp/?op=applyforaccount: Easy Hosting Control Panel
-|   /vhosts/ehcp/?op=applyfordomainaccount: Easy Hosting Control Panel
-|   /piranha/secure/passwd.php3: RedHat Piranha Virtual Server
-|   /cgi-bin/ck/mimencode: ContentKeeper Web Appliance
-|   /cgi-bin/masterCGI?: Alcatel-Lucent OmniPCX Enterprise
-|   /cgi-mod/view_help.cgi: Barracuda Networks Spam & Virus Firewall
-|   /cgi-mod/index.cgi: Barracuda Web Application Firewall
-|   /cgi-mod/smtp_test.cgi: Barracuda IM Firewall
-|   /private/sdc.tgz: IBM Bladecenter Management Logs
-|   /cgi-bin/awstats.pl: AWStats
-|   /partymgr/: Apache OFBiz
-|   /picts/BC_bwlogorev.gif: BlueCoat Reporter
-|   /picts/menu_leaf.gif: BlueCoat Reporter
-|   /vpn/images/AccessGateway.ico: Citrix
-|   /cgi-bin/image/shikaku2.png: TeraStation PRO RAID 0/1/5 Network Attached Storage
-|   /pictures/buttons/file_view_mark.gif: AXIS StorPoint
-|   /printer/image: Lexmark Printer
-|   /view/index.shtml: Axis 212 PTZ Network Camera
-|   /phpmyadmin/: phpMyAdmin
-|   /phpMyAdmin/: phpMyAdmin
-|   /pma/: phpMyAdmin
-|   /php-my-admin/: phpMyAdmin
-|   /phpMyAdmin2/: phpMyAdmin
-|   /phpMyAdmin-2/: phpMyAdmin
-|   /phpMyAdmin-2.2.3/: phpMyAdmin
-|   /phpMyAdmin-2.2.6/: phpMyAdmin
-|   /phpMyAdmin-2.5.1/: phpMyAdmin
-|   /phpMyAdmin-2.5.4/: phpMyAdmin
-|   /phpMyAdmin-2.5.5-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.5.5-rc2/: phpMyAdmin
-|   /phpMyAdmin-2.5.5/: phpMyAdmin
-|   /phpMyAdmin-2.5.5-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.5.6-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.5.6-rc2/: phpMyAdmin
-|   /phpMyAdmin-2.5.6/: phpMyAdmin
-|   /phpMyAdmin-2.5.7/: phpMyAdmin
-|   /phpMyAdmin-2.5.7-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-alpha/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-alpha2/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-beta1/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-beta2/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-rc2/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-rc3/: phpMyAdmin
-|   /phpMyAdmin-2.6.0/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-pl2/: phpMyAdmin
-|   /phpMyAdmin-2.6.0-pl3/: phpMyAdmin
-|   /phpMyAdmin-2.6.1-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.6.1-rc2/: phpMyAdmin
-|   /phpMyAdmin-2.6.1/: phpMyAdmin
-|   /phpMyAdmin-2.6.1-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.1-pl2/: phpMyAdmin
-|   /phpMyAdmin-2.6.1-pl3/: phpMyAdmin
-|   /phpMyAdmin-2.6.2-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.6.2-beta1/: phpMyAdmin
-|   /phpMyAdmin-2.6.2/: phpMyAdmin
-|   /phpMyAdmin-2.6.2-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.3/: phpMyAdmin
-|   /phpMyAdmin-2.6.3-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.6.3-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.4-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.6.4-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.6.4-pl2/: phpMyAdmin
-|   /phpMyAdmin-2.6.4-pl3/: phpMyAdmin
-|   /phpMyAdmin-2.6.4-pl4/: phpMyAdmin
-|   /phpMyAdmin-2.6.4/: phpMyAdmin
-|   /phpMyAdmin-2.7.0-beta1/: phpMyAdmin
-|   /phpMyAdmin-2.7.0-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.7.0-pl1/: phpMyAdmin
-|   /phpMyAdmin-2.7.0-pl2/: phpMyAdmin
-|   /phpMyAdmin-2.7.0/: phpMyAdmin
-|   /phpMyAdmin-2.8.0-beta1/: phpMyAdmin
-|   /phpMyAdmin-2.8.0-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.8.0-rc2/: phpMyAdmin
-|   /phpMyAdmin-2.8.0/: phpMyAdmin
-|   /phpMyAdmin-2.8.0.1/: phpMyAdmin
-|   /phpMyAdmin-2.8.0.2/: phpMyAdmin
-|   /phpMyAdmin-2.8.0.3/: phpMyAdmin
-|   /phpMyAdmin-2.8.0.4/: phpMyAdmin
-|   /phpMyAdmin-2.8.1-rc1/: phpMyAdmin
-|   /phpMyAdmin-2.8.1/: phpMyAdmin
-|   /phpMyAdmin-2.8.2/: phpMyAdmin
-|   /php-myadmin/: phpMyAdmin
-|   /phpmy-admin/: phpMyAdmin
-|   /perweb.nsf: Lotus Domino
-|   /vpuserinfo.nsf: Lotus Domino
-|   /pages/categoryresults.aspx: MS Sharepoint
-|   /projectserver/Home/HomePage.asp: MS Project Server
-|   /projectserver/images/branding.gif: MS Project Server
-|   /projectserver/images/pgHome.gif: MS Project Server
-|   /projectserver/images/pgTask.gif: MS Project Server
-|   /projectserver/Tasks/Taskspage.asp: MS Project Server
-|   /postinfo.html: Frontpage file or folder
-|   /plugins/PluginController.php?path=..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fwindows%2fwin.ini%00: OrangeHRM 2.6.3 Local File Inclusion 
-|   /cgi-bin/export_debug_msg.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
-|   /cgi-bin/config.exp: Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)
-|   /pligg/readme.html: Interesting, a readme.
-|   /pages/indexheader.php: Green Pants CMS
-|   /pages/searcher.php: Green Pants CMS
-|   /pages/indexviewentry.php: Green Pants CMS
-|   /photogallery_open.php: Heaven Soft CMS
-|   /vb/bnnr.php: vBulletin ads_saed
-|   /pix/moodlelogo.gif: Moodle files
-|   /p/: Potentially interesting folder
-|   /s/: Potentially interesting folder
-|   /v/: Potentially interesting folder
-|   /cgi-914/: Potentially interesting folder
-|   /cgi-915/: Potentially interesting folder
-|   /cgi-auth/: Potentially interesting folder
-|   /cgi-bin2/: Potentially interesting folder
-|   /cgi-bin/: Potentially interesting folder
-|   /cgibin/: Potentially interesting folder
-|   /cgi.cgi/: Potentially interesting folder
-|   /cgi-csc/: Potentially interesting folder
-|   /cgi-exe/: Potentially interesting folder
-|   /cgi/: Potentially interesting folder
-|   /cgi-home/: Potentially interesting folder
-|   /cgi-lib/: Potentially interesting folder
-|   /cgilib/: Potentially interesting folder
-|   /cgi-local/: Potentially interesting folder
-|   /cgi-perl/: Potentially interesting folder
-|   /cgi-scripts/: Potentially interesting folder
-|   /cgiscripts/: Potentially interesting folder
-|   /cgis/: Potentially interesting folder
-|   /cgi-shl/: Potentially interesting folder
-|   /cgi-shop/: Potentially interesting folder
-|   /cgi-sys/: Potentially interesting folder
-|   /cgi-weddico/: Potentially interesting folder
-|   /cgi-win/: Potentially interesting folder
-|   /cgiwin/: Potentially interesting folder
-|   /page/: Potentially interesting folder
-|   /pages/: Potentially interesting folder
-|   /partner/: Potentially interesting folder
-|   /partners/: Potentially interesting folder
-|   /passport/: Potentially interesting folder
-|   /password/: Potentially interesting folder
-|   /passwords/: Potentially interesting folder
-|   /path/: Potentially interesting folder
-|   /payment/: Potentially interesting folder
-|   /payments/: Potentially interesting folder
-|   /pccsmysqladm/: Potentially interesting folder
-|   /perl5/: Potentially interesting folder
-|   /perl/: Potentially interesting folder
-|   /personal/: Potentially interesting folder
-|   /pforum/: Potentially interesting folder
-|   /phorum/: Potentially interesting folder
-|   /phpBB/: Potentially interesting folder
-|   /php_classes/: Potentially interesting folder
-|   /phpclassifieds/: Potentially interesting folder
-|   /php/: Potentially interesting folder
-|   /phpimageview/: Potentially interesting folder
-|   /phpnuke/: Potentially interesting folder
-|   /phpPhotoAlbum/: Potentially interesting folder
-|   /phpprojekt/: Potentially interesting folder
-|   /phpSecurePages/: Potentially interesting folder
-|   /pics/: Potentially interesting folder
-|   /pictures/: Potentially interesting folder
-|   /pike/: Potentially interesting folder
-|   /piranha/: Potentially interesting folder
-|   /pls/: Potentially interesting folder
-|   /plsql/: Potentially interesting folder
-|   /plssampleadmin_/: Potentially interesting folder
-|   /plssampleadmin/: Potentially interesting folder
-|   /plssampleadmin_help/: Potentially interesting folder
-|   /plssample/: Potentially interesting folder
-|   /poll/: Potentially interesting folder
-|   /polls/: Potentially interesting folder
-|   /porn/: Potentially interesting folder
-|   /portal/: Potentially interesting folder
-|   /portals/: Potentially interesting folder
-|   /postgres/: Potentially interesting folder
-|   /postnuke/: Potentially interesting folder
-|   /ppwb/: Potentially interesting folder
-|   /printer/: Potentially interesting folder
-|   /printers/: Potentially interesting folder
-|   /privacy/: Potentially interesting folder
-|   /privado/: Potentially interesting folder
-|   /private/: Potentially interesting folder
-|   /priv/: Potentially interesting folder
-|   /prod/: Potentially interesting folder
-|   /projectserver/: Potentially interesting folder
-|   /protected/: Potentially interesting folder
-|   /proxy/: Potentially interesting folder
-|   /prueba/: Potentially interesting folder
-|   /pruebas/: Potentially interesting folder
-|   /prv/: Potentially interesting folder
-|   /pub/: Potentially interesting folder
-|   /public/: Potentially interesting folder
-|   /publica/: Potentially interesting folder
-|   /publicar/: Potentially interesting folder
-|   /publico/: Potentially interesting folder
-|   /publish/: Potentially interesting folder
-|   /purchase/: Potentially interesting folder
-|   /purchases/: Potentially interesting folder
-|   /pw/: Potentially interesting folder
-|   /python/: Potentially interesting folder
-|   /vendor/: Potentially interesting folder
-|   /vfs/: Potentially interesting folder
-|   /view/: Potentially interesting folder
-|   /vpn/: Potentially interesting folder
-|_  /vti_txt/: Potentially interesting folder
+8080/tcp closed http-proxy
+8443/tcp closed https-alt
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
-# Nmap done at Thu Apr  2 08:06:08 2026 -- 1 IP address (1 host up) scanned in 17.00 seconds
+# Nmap done at Thu Apr  2 17:37:54 2026 -- 1 IP address (1 host up) scanned in 17.43 seconds

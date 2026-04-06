@@ -1,0 +1,13 @@
+# Nmap 7.95 scan initiated Thu Apr  2 17:36:59 2026 as: nmap -Pn -n -p 22,80,111,139,443,445 -oN nmap_check_10.0.5.210.txt 10.0.5.210
+Nmap scan report for 10.0.5.210
+Host is up (0.00074s latency).
+
+PORT    STATE SERVICE
+22/tcp  open  ssh
+80/tcp  open  http
+111/tcp open  rpcbind
+139/tcp open  netbios-ssn
+443/tcp open  https
+445/tcp open  microsoft-ds
+
+# Nmap done at Thu Apr  2 17:36:59 2026 -- 1 IP address (1 host up) scanned in 0.11 seconds

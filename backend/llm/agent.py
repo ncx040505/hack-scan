@@ -135,14 +135,9 @@ class SecurityAgent:
                     await self._log("info", f"🤖 使用 LLM 配置: {db_config.name}", 
                                   f"模型: {db_config.model}")
                 else:
-                    # 使用环境变量默认配置
-                    config = {
-                        'model': settings.llm_model,
-                        'temperature': settings.llm_temperature,
-                        'api_key': settings.openai_api_key,
-                        'base_url': settings.openai_base_url,
-                    }
-                    await self._log("info", f"🤖 使用默认 LLM 配置", f"模型: {settings.llm_model}")
+                    # 无配置时抛出异常
+                    await self._log("error", "❌ LLM 配置未设置", "请在 Web 界面中配置 LLM")
+                    raise RuntimeError("LLM 配置未设置，请在 Web 界面的设置页面中添加 LLM 配置")
         
         self.llm = ChatOpenAI(
             model=config.get('model', 'gpt-4o'),
@@ -196,18 +191,35 @@ class SecurityAgent:
     
     def _get_system_prompt(self) -> str:
         """获取系统提示词"""
-        tools_desc = "\n".join([
-            f"- {t['name']}: {t['description']}" 
-            for t in self._get_all_tools_schema()
-        ])
+        # 构建详细的工具描述，包含参数信息
+        tools_details = []
+        for t in self._get_all_tools_schema():
+            params = t.get('parameters', {}).get('properties', {})
+            required = t.get('parameters', {}).get('required', [])
+            
+            param_lines = []
+            for pname, pinfo in params.items():
+                req_mark = "(必需)" if pname in required else "(可选)"
+                param_lines.append(f"    - {pname} {req_mark}: {pinfo.get('description', '')}")
+            
+            params_str = "\n".join(param_lines) if param_lines else "    无参数"
+            tools_details.append(f"- **{t['name']}**: {t['description']}\n  参数:\n{params_str}")
+        
+        tools_desc = "\n\n".join(tools_details)
         
         base_prompt = f"""你是一名专业的渗透测试专家和安全研究员。你的任务是对目标进行全面的安全测试。
 
 ## 目标信息
 - 目标: {self.target}
 
-## 可用工具
+## 可用工具及其参数
 {tools_desc}
+
+## 重要：工具调用规范
+调用工具时，必须严格按照上面列出的参数名传递参数！例如：
+- 调用 curl 时使用 "url" 参数: {{"url": "http://example.com"}}
+- 调用 whatweb 时使用 "target" 参数: {{"target": "http://example.com"}}
+- 调用 nikto 时使用 "target" 参数: {{"target": "http://example.com"}}
 
 ## 工作方式
 1. 分析当前掌握的信息
@@ -232,11 +244,13 @@ class SecurityAgent:
 当你认为测试已经足够全面，设置 is_complete: true 并提供 final_summary。
 
 ## 注意事项
+- 如果目标是 HTTP/HTTPS URL，优先使用 Web 测试工具（curl、whatweb、nikto、dirbuster 等），不需要先用 nmap 扫描端口
 - 从侦察开始，逐步深入
 - 根据发现调整测试策略
 - 记录所有重要发现
 - 不要执行破坏性操作
 - 保持测试的合法性和道德性
+- 如果遇到 401/403 需要认证，尝试常见凭据或使用用户提供的凭据
 - 当遇到问题需要用户决策、需要更多信息、或需要确认敏感操作时，使用 ask_user 工具向用户提问
 """
         
@@ -467,21 +481,175 @@ class SecurityAgent:
             "summary": "达到最大迭代次数，测试终止"
         }
 
+    def _parse_target_port(self, value: str) -> tuple[str, int]:
+        """从字符串中智能解析 target 和 port
+        
+        支持格式:
+        - "127.0.0.1:80" 或 "127.0.0.1 80"
+        - "http://127.0.0.1:80"
+        - "domain.com:443"
+        - "127.0.0.1" (无端口则返回 None)
+        
+        Returns:
+            (target, port) - port 可能为 None
+        """
+        if not value:
+            return None, None
+            
+        value = value.strip()
+        
+        # 处理 URL 格式
+        url_match = re.match(r'^(https?://)?([^:/\s]+)(?::(\d+))?', value)
+        if url_match:
+            scheme, host, port = url_match.groups()
+            if port:
+                return host, int(port)
+            # 根据 scheme 推断默认端口
+            if scheme == 'https://':
+                return host, 443
+            elif scheme == 'http://':
+                return host, 80
+            return host, None
+        
+        # 处理 host:port 格式
+        if ':' in value:
+            parts = value.rsplit(':', 1)
+            if len(parts) == 2 and parts[1].isdigit():
+                return parts[0], int(parts[1])
+        
+        # 处理 host port 格式（空格分隔）
+        parts = value.split()
+        if len(parts) >= 2 and parts[-1].isdigit():
+            return ' '.join(parts[:-1]), int(parts[-1])
+        
+        # 纯 host，无端口
+        return value, None
+
+    def _normalize_tool_args(self, tool_name: str, tool_args: dict) -> dict:
+        """标准化工具参数，自动修正常见的参数名混淆和格式问题"""
+        args = tool_args.copy()
+        
+        # 定义每个工具需要的主要参数名
+        # 格式: {tool_name: (expected_param, [alternative_names])}
+        param_mappings = {
+            "whatweb": ("target", ["url", "host", "domain"]),
+            "nikto": ("target", ["url", "host"]),
+            "nuclei": ("target", ["url", "host"]),
+            "nmap": ("target", ["host", "ip", "domain"]),
+            "sslscan": ("target", ["host", "url"]),
+            "whois": ("target", ["domain", "ip", "host"]),
+            "netcat": ("target", ["host", "ip"]),
+            "hydra": ("target", ["host", "ip"]),
+            "curl": ("url", ["target", "host"]),
+            "dirbuster": ("url", ["target", "host"]),
+            "sqlmap": ("url", ["target"]),
+            "dig": ("domain", ["target", "host"]),
+        }
+        
+        if tool_name in param_mappings:
+            expected_param, alternatives = param_mappings[tool_name]
+            # 如果期望的参数不存在，尝试从替代参数中获取
+            if expected_param not in args or not args.get(expected_param):
+                for alt in alternatives:
+                    if alt in args and args.get(alt):
+                        args[expected_param] = args.pop(alt)
+                        logger.debug(f"Auto-mapped {alt} -> {expected_param} for {tool_name}")
+                        break
+        
+        # ========== 特殊工具的智能参数解析 ==========
+        
+        # netcat: 智能解析 target 和 port
+        if tool_name == "netcat":
+            args = self._normalize_netcat_args(args)
+        
+        # nmap: 处理 target 中可能包含的端口信息
+        elif tool_name == "nmap":
+            args = self._normalize_nmap_args(args)
+        
+        # curl: 确保 URL 格式正确
+        elif tool_name == "curl":
+            args = self._normalize_curl_args(args)
+        
+        return args
+    
+    def _normalize_netcat_args(self, args: dict) -> dict:
+        """智能解析 netcat 参数"""
+        # 如果有 args 字符串，尝试从中提取 target 和 port
+        if args.get("args") and not args.get("target"):
+            args_str = args["args"]
+            # 尝试解析 args 字符串
+            target, port = self._parse_target_port(args_str)
+            if target:
+                args["target"] = target
+                if port and not args.get("port"):
+                    args["port"] = port
+                # 如果成功解析出 target 和 port，清除 args 以使用结构化参数
+                if args.get("target") and args.get("port"):
+                    args.pop("args", None)
+                    logger.debug(f"Auto-parsed netcat args: target={target}, port={port}")
+        
+        # 从 target 中提取 port（如 "127.0.0.1:80"）
+        if args.get("target") and not args.get("port"):
+            target, port = self._parse_target_port(args["target"])
+            if target and port:
+                args["target"] = target
+                args["port"] = port
+                logger.debug(f"Auto-extracted port from target: {target}:{port}")
+        
+        # 从 destination 参数提取（LLM 有时用 destination）
+        if not args.get("target") and args.get("destination"):
+            dest = args.pop("destination")
+            target, port = self._parse_target_port(dest)
+            args["target"] = target
+            if port and not args.get("port"):
+                args["port"] = port
+            logger.debug(f"Auto-mapped destination -> target for netcat")
+        
+        return args
+    
+    def _normalize_nmap_args(self, args: dict) -> dict:
+        """智能解析 nmap 参数"""
+        # 处理 target 中可能包含端口的情况（如 "127.0.0.1:80"）
+        if args.get("target") and ':' in str(args["target"]):
+            target_str = args["target"]
+            # 检查是否是 IP:port 格式
+            if re.match(r'^[\d\.]+:\d+$', target_str):
+                host, port = target_str.split(':')
+                args["target"] = host
+                # 如果没有指定 ports 参数，添加端口
+                if not args.get("ports"):
+                    args["ports"] = port
+                logger.debug(f"Auto-extracted port from nmap target: {host}, ports={port}")
+        return args
+    
+    def _normalize_curl_args(self, args: dict) -> dict:
+        """智能解析 curl 参数"""
+        # 确保 URL 有协议前缀
+        if args.get("url"):
+            url = args["url"]
+            if not url.startswith(('http://', 'https://')):
+                args["url"] = f"http://{url}"
+                logger.debug(f"Auto-added http:// prefix to curl url")
+        return args
+
     async def _execute_tool(self, tool_name: str, tool_args: dict) -> ToolResult:
-        """执行工具（包括用户 Skill 和搜索）"""
-        await self._log("tool", f"🔧 调用工具: {tool_name}", json.dumps(tool_args, ensure_ascii=False, indent=2), tool_name)
+        """执行工具（包括用户 Skill 和搜索），支持自动修复重试"""
+        # 标准化参数
+        normalized_args = self._normalize_tool_args(tool_name, tool_args)
+        
+        await self._log("tool", f"🔧 调用工具: {tool_name}", json.dumps(normalized_args, ensure_ascii=False, indent=2), tool_name)
         
         # 检查是否是 ask_user 工具
         if tool_name == "ask_user":
-            return await self._execute_ask_user(tool_args)
+            return await self._execute_ask_user(normalized_args)
         
         # 检查是否是用户 Skill (以 skill_ 前缀开头)
         if tool_name.startswith("skill_"):
-            return await self._execute_skill(tool_name, tool_args)
+            return await self._execute_skill(tool_name, normalized_args)
         
         # 检查是否是联网搜索
         if tool_name == "web_search":
-            return await self._execute_web_search(tool_args)
+            return await self._execute_web_search(normalized_args)
         
         tool = get_tool(tool_name)
         if not tool:
@@ -495,36 +663,146 @@ class SecurityAgent:
             await self._log("error", f"❌ 工具安装失败: {tool_name}", None, tool_name)
             return result
         
-        self.tools_used.append({"name": tool_name, "args": tool_args})
+        self.tools_used.append({"name": tool_name, "args": normalized_args})
         
+        # 执行工具，支持自动修复重试
+        result = await self._execute_tool_with_auto_repair(tool, tool_name, normalized_args)
+        
+        if result.success:
+            await self._log(
+                "output", 
+                f"📤 {tool_name} 输出 ({len(result.output)} 字符)",
+                result.output[:2000] if result.output else "无输出",
+                tool_name
+            )
+        else:
+            await self._log(
+                "error",
+                f"❌ {tool_name} 执行失败",
+                result.error,
+                tool_name
+            )
+        
+        # 分析输出中的发现
+        await self._analyze_output(tool_name, result)
+        
+        return result
+    
+    async def _execute_tool_with_auto_repair(self, tool, tool_name: str, args: dict, max_retries: int = 1) -> ToolResult:
+        """执行工具并在失败时尝试自动修复参数
+        
+        Args:
+            tool: 工具实例
+            tool_name: 工具名称
+            args: 参数字典
+            max_retries: 最大重试次数
+            
+        Returns:
+            ToolResult
+        """
         try:
-            result = await tool.execute(**tool_args)
+            result = await tool.execute(**args)
             
-            if result.success:
-                await self._log(
-                    "output", 
-                    f"📤 {tool_name} 输出 ({len(result.output)} 字符)",
-                    result.output[:2000] if result.output else "无输出",
-                    tool_name
-                )
-            else:
-                await self._log(
-                    "error",
-                    f"❌ {tool_name} 执行失败",
-                    result.error,
-                    tool_name
-                )
+            # 如果成功或已达到重试上限，直接返回
+            if result.success or max_retries <= 0:
+                return result
             
-            # 分析输出中的发现
-            await self._analyze_output(tool_name, result)
+            # 尝试根据错误信息自动修复参数
+            repaired_args = self._try_auto_repair_args(tool_name, args, result.error)
+            
+            if repaired_args and repaired_args != args:
+                await self._log(
+                    "info", 
+                    f"🔄 尝试自动修复参数并重试 {tool_name}",
+                    f"修复后参数: {json.dumps(repaired_args, ensure_ascii=False)}"
+                )
+                # 递归重试（减少重试次数）
+                return await self._execute_tool_with_auto_repair(tool, tool_name, repaired_args, max_retries - 1)
             
             return result
             
         except Exception as e:
             logger.error(f"Tool execution error: {e}")
-            result = ToolResult(success=False, output="", error=str(e))
-            await self._log("error", f"❌ {tool_name} 异常", str(e), tool_name)
-            return result
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def _try_auto_repair_args(self, tool_name: str, args: dict, error: str) -> dict:
+        """根据错误信息尝试自动修复参数
+        
+        Args:
+            tool_name: 工具名称
+            args: 原参数
+            error: 错误信息
+            
+        Returns:
+            修复后的参数，如果无法修复则返回 None
+        """
+        if not error:
+            return None
+        
+        repaired = args.copy()
+        error_lower = error.lower()
+        
+        # 通用修复：缺少必需参数
+        if "缺少必需参数" in error or "missing" in error_lower or "required" in error_lower:
+            # 尝试从 scan context 获取目标
+            if hasattr(self, 'target') and self.target:
+                if tool_name in ["nmap", "netcat", "whatweb", "nikto", "nuclei", "sslscan"]:
+                    if not repaired.get("target"):
+                        # 解析目标（可能是 URL 或 IP）
+                        target = self.target
+                        if target.startswith(('http://', 'https://')):
+                            # 从 URL 提取 host
+                            match = re.match(r'https?://([^:/]+)', target)
+                            if match:
+                                target = match.group(1)
+                        repaired["target"] = target
+                        logger.debug(f"Auto-repair: added target={target} from scan context")
+                
+                if tool_name == "curl" and not repaired.get("url"):
+                    repaired["url"] = self.target
+                    logger.debug(f"Auto-repair: added url={self.target} from scan context")
+        
+        # netcat 特定修复
+        if tool_name == "netcat":
+            # 如果缺少端口且错误提到端口
+            if "port" in error_lower and not repaired.get("port"):
+                # 尝试常见端口
+                if repaired.get("target"):
+                    # 检查 target 是否暗示了协议
+                    target = repaired["target"]
+                    if "https" in str(args).lower() or "443" in str(args):
+                        repaired["port"] = 443
+                    elif "http" in str(args).lower() or "80" in str(args):
+                        repaired["port"] = 80
+                    else:
+                        # 默认尝试 80
+                        repaired["port"] = 80
+                    logger.debug(f"Auto-repair: guessed port={repaired['port']} for netcat")
+        
+        # nmap 特定修复
+        if tool_name == "nmap":
+            # 如果没有目标且有 scan context
+            if "target" in error_lower and not repaired.get("target"):
+                if hasattr(self, 'target') and self.target:
+                    repaired["target"] = self.target
+        
+        # curl 特定修复
+        if tool_name == "curl":
+            # URL 格式问题
+            if repaired.get("url"):
+                url = repaired["url"]
+                # 移除多余的空格
+                url = url.strip()
+                # 确保有协议
+                if not url.startswith(('http://', 'https://')):
+                    repaired["url"] = f"http://{url}"
+                    logger.debug(f"Auto-repair: fixed curl URL format")
+        
+        # 如果没有任何修改，返回 None
+        if repaired == args:
+            return None
+        
+        return repaired
     
     async def _execute_skill(self, tool_name: str, tool_args: dict) -> ToolResult:
         """执行用户自定义 Skill"""

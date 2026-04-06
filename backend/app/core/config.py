@@ -17,16 +17,21 @@ class Settings(BaseSettings):
     mongodb_db: str = "vulnscanner_raw"
     redis_url: str = "redis://localhost:6379/0"
     
-    # LLM Configuration
+    # LLM Configuration (已弃用 - 请使用 Web 界面管理)
+    # 以下配置仅作为后备默认值，建议通过数据库配置管理
     openai_api_key: str = ""
-    openai_base_url: str | None = None  # 支持自定义 API 端点
+    openai_base_url: str | None = None
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.1
+    
+    # Kali Scanner
+    kali_scanner_url: str = "http://kali_scanner:8888"
     
     # Scanning Configuration
     max_concurrent_scans: int = 5
     scan_timeout: int = 3600  # 1 hour
     rate_limit_per_target: int = 10  # requests per second
+    scan_temp_dir: str = "/tmp/shelling_scans"  # 扫描结果临时目录
     
     # Security
     secret_key: str = "change-me-in-production"

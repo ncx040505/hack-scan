@@ -53,6 +53,7 @@ class ScanTask(Base):
     # LLM 分析结果
     llm_summary = Column(Text)  # AI 生成的漏洞总结
     llm_risk_score = Column(Integer)  # AI 评估的风险分数 0-100
+    attack_path_analysis = Column(JSON)  # AI 生成的攻击路径分析
     
     vulnerabilities = relationship("Vulnerability", back_populates="scan_task")
 

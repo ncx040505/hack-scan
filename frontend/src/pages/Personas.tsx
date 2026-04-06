@@ -28,6 +28,7 @@ export default function Personas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['personas'] })
       setEditingPersona(null)
+      setShowForm(false)
     },
   })
 
@@ -65,7 +66,7 @@ export default function Personas() {
   return (
     <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">AI 人格</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
@@ -85,7 +86,7 @@ export default function Personas() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard label="总数" value={data?.total || 0} icon={Bot} color="text-blue-500" />
         <StatCard
           label="默认人格"

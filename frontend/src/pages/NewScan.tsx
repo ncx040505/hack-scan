@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Play, AlertTriangle, Settings, ChevronDown, ChevronUp, Bot } from 'lucide-react'
+import { Play, AlertTriangle, Settings, ChevronDown, ChevronUp, Bot, Info } from 'lucide-react'
 import { createScan, ScanConfig, getPersonasBrief } from '../lib/api'
 
 const scanTypeLabels: Record<string, { name: string; desc: string }> = {
@@ -10,11 +10,32 @@ const scanTypeLabels: Record<string, { name: string; desc: string }> = {
   quick: { name: '仅扫描端口', desc: '仅扫描常用端口，不进行漏洞检测' },
 }
 
+// 判断目标是否为 URL（带协议）
+function isUrl(target: string): boolean {
+  return /^https?:\/\//i.test(target.trim())
+}
+
+// 从 URL 提取端口信息
+function getUrlPort(target: string): string | null {
+  try {
+    const url = new URL(target.trim())
+    if (url.port) {
+      return url.port
+    }
+    // 默认端口
+    return url.protocol === 'https:' ? '443' : '80'
+  } catch {
+    return null
+  }
+}
+
 export default function NewScan() {
   const navigate = useNavigate()
   const [target, setTarget] = useState('')
   const [scanType, setScanType] = useState('full')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isUrlTarget, setIsUrlTarget] = useState(false)
+  const [detectedPort, setDetectedPort] = useState<string | null>(null)
   const [config, setConfig] = useState<Partial<ScanConfig>>({
     enable_port_scan: true,
     enable_nuclei: true,
@@ -24,6 +45,23 @@ export default function NewScan() {
     ai_custom_prompt: '',
     ai_persona_id: null,  // null 表示使用默认人格
   })
+
+  // 监听目标变化，自动检测是否为 URL
+  useEffect(() => {
+    const urlDetected = isUrl(target)
+    setIsUrlTarget(urlDetected)
+    
+    if (urlDetected) {
+      const port = getUrlPort(target)
+      setDetectedPort(port)
+      // URL 模式下默认禁用端口扫描
+      setConfig(prev => ({ ...prev, enable_port_scan: false }))
+    } else {
+      setDetectedPort(null)
+      // IP/域名模式下默认启用端口扫描
+      setConfig(prev => ({ ...prev, enable_port_scan: true }))
+    }
+  }, [target])
 
   // 获取可用的人格列表
   const { data: personas } = useQuery({
@@ -71,12 +109,22 @@ export default function NewScan() {
             className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
+          {/* URL 检测提示 */}
+          {isUrlTarget && (
+            <div className="mt-2 flex items-start gap-2 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 p-2 rounded">
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>
+                检测到 URL 目标，将仅对端口 {detectedPort} 进行测试，已自动禁用端口扫描。
+                如需扫描其他端口，请使用自定义模式手动开启。
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Scan Type */}
         <div>
           <label className="block text-sm font-medium mb-2">扫描类型</label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(scanTypeLabels).map(([type, { name }]) => (
               <button
                 key={type}
@@ -107,7 +155,12 @@ export default function NewScan() {
                 onChange={e => setConfig({ ...config, enable_port_scan: e.target.checked })}
                 className="w-4 h-4"
               />
-              启用端口扫描 (Nmap)
+              <span className="flex-1">
+                启用端口扫描 (Nmap)
+                {isUrlTarget && !config.enable_port_scan && (
+                  <span className="ml-2 text-xs text-blue-500">(URL 模式已自动禁用)</span>
+                )}
+              </span>
             </label>
             
             <label className="flex items-center gap-3">

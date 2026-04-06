@@ -3,6 +3,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import AsyncIterator
+import os
+import tempfile
+from pathlib import Path
 
 
 class ScannerType(str, Enum):
@@ -45,3 +48,34 @@ class BaseScanner(ABC):
         """验证目标格式"""
         # 基础验证，子类可覆盖
         return bool(target and len(target) < 500)
+    
+    def get_temp_dir(self) -> Path:
+        """获取扫描器临时目录"""
+        from app.core.config import get_settings
+        settings = get_settings()
+        # 优先从数据库读取，如果失败则使用 .env 配置作为后备
+        temp_dir = Path(settings.scan_temp_dir) / self.scanner_type.value
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        return temp_dir
+    
+    async def get_temp_dir_async(self) -> Path:
+        """异步获取扫描器临时目录（优先从数据库读取）"""
+        try:
+            from app.core.database import async_session_factory
+            from app.api.settings import get_scan_settings_from_db
+            
+            async with async_session_factory() as db:
+                scan_settings = await get_scan_settings_from_db(db)
+                temp_dir = Path(scan_settings.scan_temp_dir) / self.scanner_type.value
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                return temp_dir
+        except Exception:
+            # 如果数据库读取失败，回退到 .env 配置
+            return self.get_temp_dir()
+    
+    def get_temp_file(self, prefix: str = "", suffix: str = "") -> str:
+        """创建临时文件路径（不创建文件本身）"""
+        temp_dir = self.get_temp_dir()
+        fd, path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=str(temp_dir))
+        os.close(fd)  # 关闭文件描述符，让扫描器自己管理文件
+        return path

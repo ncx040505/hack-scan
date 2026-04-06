@@ -1,0 +1,48 @@
+FROM kalilinux/kali-rolling
+
+WORKDIR /scanner
+
+# 使用清华大学镜像源
+RUN echo "deb http://mirrors.tuna.tsinghua.edu.cn/kali kali-rolling main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    apt-get update
+
+# 安装基础工具
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    # 基础系统工具
+    curl \
+    wget \
+    git \
+    unzip \
+    # Python 环境
+    python3-pip \
+    # 核心扫描工具
+    nmap \
+    masscan \
+    # 网络工具
+    netcat-traditional \
+    dnsutils \
+    whois \
+    iproute2 \
+    iputils-ping \
+    traceroute \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建工作目录
+RUN mkdir -p /scanner/tools /scanner/output /scanner/logs
+
+# 安装 Python 依赖（用于 API 服务）
+COPY kali-requirements.txt /scanner/
+RUN pip3 install --no-cache-dir -r /scanner/kali-requirements.txt --break-system-packages
+
+# 复制 API 服务代码
+COPY kali-service/ /scanner/service/
+
+# 暴露 API 端口
+EXPOSE 8888
+
+# 健康检查
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8888/health || exit 1
+
+# 启动 API 服务
+CMD ["python3", "/scanner/service/main.py"]

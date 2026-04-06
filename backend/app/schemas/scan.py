@@ -9,13 +9,24 @@ from app.models.database import ScanStatus, SeverityLevel
 
 class ScanConfig(BaseModel):
     """扫描配置"""
+    # 智能工具选择
+    auto_select_tools: bool = Field(
+        default=True,
+        description="使用 LLM 自动选择扫描工具（推荐）。关闭后使用手动配置。"
+    )
+    
+    # 手动工具配置（auto_select_tools=False 时生效）
     enable_port_scan: bool = True
     enable_web_scan: bool = True
     enable_nuclei: bool = True
+    
+    # AI Agent 配置
     enable_ai_agent: bool = True
     ai_max_iterations: int = Field(default=0, ge=0, description="AI Agent 最大迭代次数，0 表示无限制")
     ai_custom_prompt: str | None = Field(default=None, description="AI Agent 自定义提示词")
     ai_persona_id: str | None = Field(default=None, description="AI 人格 ID，为空则使用默认人格")
+    
+    # 扫描参数
     custom_ports: list[int] = []
     scan_depth: int = Field(default=3, ge=1, le=10)
     rate_limit: int = Field(default=10, ge=1, le=100)  # req/s
@@ -241,9 +252,18 @@ class SearchSettings(BaseModel):
     max_results: int = Field(default=5, ge=1, le=20)
 
 
+class ScanSettings(BaseModel):
+    """扫描配置设置"""
+    max_concurrent_scans: int = Field(default=5, ge=1, le=20, description="最大并发扫描数")
+    scan_timeout: int = Field(default=3600, ge=60, le=86400, description="扫描超时时间（秒）")
+    rate_limit_per_target: int = Field(default=10, ge=1, le=100, description="每个目标的请求速率限制（req/s）")
+    scan_temp_dir: str = Field(default="/tmp/shelling_scans", description="扫描临时文件目录")
+
+
 class SystemSettings(BaseModel):
     """系统设置"""
     search: SearchSettings = Field(default_factory=SearchSettings)
+    scan: ScanSettings = Field(default_factory=ScanSettings)
     
     class Config:
         from_attributes = True

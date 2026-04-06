@@ -1,1 +1,0 @@
-http://10.0.5.210:5000 [200 OK] Country[RESERVED][ZZ], HTML5, HTTPServer[nginx], IP[10.0.5.210], Script[module], Title[飞牛 fnOS], nginx

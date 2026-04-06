@@ -19,6 +19,8 @@ import {
     X,
     Play,
     Loader2,
+    RefreshCw,
+    ChevronDown,
 } from 'lucide-react'
 import {
     getSearchSettings,
@@ -29,9 +31,11 @@ import {
     deleteLLMConfig,
     activateLLMConfig,
     testLLMConfig,
+    fetchLLMModels,
     type SearchSettings,
     type LLMConfig,
     type LLMConfigCreate,
+    type LLMModel,
 } from '../lib/api'
 
 // ============ 联网搜索配置 ============
@@ -159,6 +163,12 @@ function LLMSettingsTab() {
     const [showApiKey, setShowApiKey] = useState(false)
     const [testingId, setTestingId] = useState<string | null>(null)
     const [testResult, setTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null)
+    
+    // 模型列表相关状态
+    const [availableModels, setAvailableModels] = useState<LLMModel[]>([])
+    const [isFetchingModels, setIsFetchingModels] = useState(false)
+    const [modelsFetchMessage, setModelsFetchMessage] = useState<string | null>(null)
+    const [showModelDropdown, setShowModelDropdown] = useState(false)
 
     const createMutation = useMutation({
         mutationFn: (data: LLMConfigCreate) => createLLMConfig(data),
@@ -208,6 +218,43 @@ function LLMSettingsTab() {
         setEditingId(null)
         setFormData(defaultLLMFormData)
         setShowApiKey(false)
+        setAvailableModels([])
+        setModelsFetchMessage(null)
+        setShowModelDropdown(false)
+    }
+    
+    // 获取模型列表
+    const handleFetchModels = async () => {
+        setIsFetchingModels(true)
+        setModelsFetchMessage(null)
+        setShowModelDropdown(false)
+        
+        try {
+            const result = await fetchLLMModels(
+                formData.api_key || undefined,
+                formData.api_base_url || undefined,
+                editingId || undefined  // 编辑模式下使用已保存配置的 API key
+            )
+            
+            if (result.success && result.models.length > 0) {
+                setAvailableModels(result.models)
+                setShowModelDropdown(true)
+                setModelsFetchMessage(result.message)
+            } else {
+                setAvailableModels([])
+                setModelsFetchMessage(result.message || '未获取到模型')
+            }
+        } catch (err) {
+            setModelsFetchMessage('获取模型失败')
+            setAvailableModels([])
+        } finally {
+            setIsFetchingModels(false)
+        }
+    }
+    
+    const handleSelectModel = (modelId: string) => {
+        setFormData((prev) => ({ ...prev, model: modelId }))
+        setShowModelDropdown(false)
     }
 
     const handleProviderChange = (provider: string) => {
@@ -456,14 +503,74 @@ function LLMSettingsTab() {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     模型名称 <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    value={formData.model}
-                                    onChange={(e) => setFormData((p) => ({ ...p, model: e.target.value }))}
-                                    placeholder="gpt-4o"
-                                    required
-                                    className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <div className="flex gap-2">
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="text"
+                                            value={formData.model}
+                                            onChange={(e) => setFormData((p) => ({ ...p, model: e.target.value }))}
+                                            placeholder="gpt-4o"
+                                            required
+                                            className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        {/* 模型下拉列表 */}
+                                        {showModelDropdown && availableModels.length > 0 && (
+                                            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                                {availableModels.map((model) => (
+                                                    <button
+                                                        key={model.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectModel(model.id)}
+                                                        className={clsx(
+                                                            'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-between',
+                                                            formData.model === model.id && 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                                        )}
+                                                    >
+                                                        <span className="font-medium truncate">{model.id}</span>
+                                                        {model.owned_by && (
+                                                            <span className="text-xs text-gray-400 ml-2 shrink-0">{model.owned_by}</span>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleFetchModels}
+                                        disabled={isFetchingModels}
+                                        title="从 API 获取可用模型列表"
+                                        className={clsx(
+                                            'px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1',
+                                            isFetchingModels && 'opacity-60 cursor-not-allowed'
+                                        )}
+                                    >
+                                        {isFetchingModels ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <RefreshCw className="w-4 h-4" />
+                                        )}
+                                        <span className="text-sm">获取</span>
+                                    </button>
+                                    {showModelDropdown && availableModels.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowModelDropdown(false)}
+                                            className="px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            title="关闭列表"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                {modelsFetchMessage && (
+                                    <p className={clsx(
+                                        'mt-1 text-xs',
+                                        availableModels.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+                                    )}>
+                                        {modelsFetchMessage}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Temperature & Max Tokens */}

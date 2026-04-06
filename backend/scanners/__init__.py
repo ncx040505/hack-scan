@@ -1,14 +1,13 @@
 """Scanner factory and orchestration"""
 from .base import BaseScanner, ScannerType
-from .nmap_scanner import NmapScanner
-from .nuclei_scanner import NucleiScanner
+from .kali_scanner import KaliNmapScanner, KaliNucleiScanner
 
 
 def get_scanner(scanner_type: ScannerType) -> BaseScanner:
     """获取扫描器实例"""
     scanners = {
-        ScannerType.NMAP: NmapScanner,
-        ScannerType.NUCLEI: NucleiScanner,
+        ScannerType.NMAP: KaliNmapScanner,
+        ScannerType.NUCLEI: KaliNucleiScanner,
     }
     
     if scanner_type not in scanners:
