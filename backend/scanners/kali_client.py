@@ -17,6 +17,11 @@ class ExecuteResult:
     stderr: str
     duration: float
     error: Optional[str] = None
+    
+    @property
+    def output(self) -> str:
+        """兼容性属性：返回 stdout"""
+        return self.stdout
 
 
 @dataclass
@@ -122,6 +127,52 @@ class KaliClient:
             "/execute",
             json_data=payload,
             timeout=timeout + 10  # 留出额外时间
+        )
+        
+        return ExecuteResult(
+            success=response["success"],
+            returncode=response["returncode"],
+            stdout=response["stdout"],
+            stderr=response["stderr"],
+            duration=response["duration"],
+            error=response.get("error")
+        )
+    
+    async def execute_shell_command(
+        self,
+        command: str,
+        timeout: int = 300,
+        cwd: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None
+    ) -> ExecuteResult:
+        """执行 shell 命令（支持管道、重定向等）
+        
+        Args:
+            command: 完整的 shell 命令字符串
+            timeout: 超时时间（秒）
+            cwd: 工作目录
+            env: 环境变量
+            
+        Returns:
+            ExecuteResult: 执行结果
+        """
+        payload = {
+            "command": command,
+            "timeout": timeout,
+        }
+        
+        if cwd:
+            payload["cwd"] = cwd
+        if env:
+            payload["env"] = env
+        
+        logger.info(f"Executing shell command in Kali: {command[:100]}...")
+        
+        response = await self._request(
+            "POST",
+            "/execute_shell",
+            json_data=payload,
+            timeout=timeout + 10
         )
         
         return ExecuteResult(

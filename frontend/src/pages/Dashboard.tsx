@@ -71,6 +71,18 @@ const severityLabels: Record<string, string> = {
   info: '信息',
 }
 
+const pieTooltipContentStyle = {
+  backgroundColor: '#FFFFFF',
+  border: '1px solid #E5E7EB',
+  borderRadius: '8px',
+  color: '#111827',
+  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.12)',
+}
+
+const pieTooltipTextStyle = {
+  color: '#111827',
+}
+
 export default function Dashboard() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['scans'],
@@ -223,12 +235,9 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(31, 41, 55, 0.9)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#fff',
-                  }}
+                  contentStyle={pieTooltipContentStyle}
+                  labelStyle={pieTooltipTextStyle}
+                  itemStyle={pieTooltipTextStyle}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -303,12 +312,9 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(31, 41, 55, 0.9)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#fff',
-                    }}
+                    contentStyle={pieTooltipContentStyle}
+                    labelStyle={pieTooltipTextStyle}
+                    itemStyle={pieTooltipTextStyle}
                   />
                   <Legend
                     verticalAlign="bottom"
@@ -341,12 +347,9 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(31, 41, 55, 0.9)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#fff',
-                    }}
+                    contentStyle={pieTooltipContentStyle}
+                    labelStyle={pieTooltipTextStyle}
+                    itemStyle={pieTooltipTextStyle}
                   />
                   <Legend
                     verticalAlign="bottom"
@@ -495,9 +498,9 @@ function ScanRow({ scan }: { scan: ScanTask }) {
 function RiskScore({ score }: { score: number }) {
   const color =
     score >= 80 ? 'text-red-500' :
-    score >= 60 ? 'text-orange-500' :
-    score >= 40 ? 'text-yellow-500' :
-    'text-green-500'
+      score >= 60 ? 'text-orange-500' :
+        score >= 40 ? 'text-yellow-500' :
+          'text-green-500'
 
   return <span className={`font-semibold ${color}`}>{score}/100</span>
 }

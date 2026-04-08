@@ -20,7 +20,6 @@ import {
     Play,
     Loader2,
     RefreshCw,
-    ChevronDown,
 } from 'lucide-react'
 import {
     getSearchSettings,

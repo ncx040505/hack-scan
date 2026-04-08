@@ -23,9 +23,6 @@ langchain-core>=0.3.0
 langchain-openai>=0.2.0
 openai>=1.10.0
 
-# Security Scanning Tools (Python bindings)
-python-nmap>=0.7.1
-
 # Data Processing
 pydantic>=2.5.3
 pydantic-settings>=2.1.0
@@ -33,3 +30,6 @@ pydantic-settings>=2.1.0
 # Utilities
 python-dotenv>=1.0.0
 loguru>=0.7.2
+
+# 注意：扫描工具相关依赖已移除
+# 所有扫描操作通过 Kali 容器的 HTTP API 执行

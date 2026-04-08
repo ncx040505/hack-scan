@@ -1,8 +1,0 @@
-# Nmap 7.95 scan initiated Thu Apr  2 17:44:23 2026 as: nmap -Pn -n -p 445 --script smb-enum-shares --script-args smbusername=guest,smbpassword=,smbdomain=WORKGROUP -oN nmap_smb_shares_guest_10.0.5.210.txt 10.0.5.210
-Nmap scan report for 10.0.5.210
-Host is up (0.00038s latency).
-
-PORT    STATE SERVICE
-445/tcp open  microsoft-ds
-
-# Nmap done at Thu Apr  2 17:44:23 2026 -- 1 IP address (1 host up) scanned in 0.16 seconds

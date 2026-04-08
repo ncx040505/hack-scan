@@ -6,7 +6,7 @@ from typing import Optional, Callable, Awaitable
 from pydantic import BaseModel, Field
 from loguru import logger
 
-from llm.tool_installer import ensure_tool_available, is_tool_available
+from scanners.kali_client import KaliClient
 
 
 class ToolResult(BaseModel):
@@ -16,25 +16,72 @@ class ToolResult(BaseModel):
     error: Optional[str] = None
 
 
-async def _run_shell_command(cmd: str, timeout: int = 60) -> ToolResult:
-    """通用 shell 命令执行（支持管道、重定向等）"""
+# 全局 Kali 客户端
+_kali_client: Optional[KaliClient] = None
+
+
+def get_kali_client() -> KaliClient:
+    """获取 Kali 客户端单例"""
+    global _kali_client
+    if _kali_client is None:
+        _kali_client = KaliClient()
+    return _kali_client
+
+
+async def _run_in_kali(command: str, args: list = None, timeout: int = 60) -> ToolResult:
+    """在 Kali 容器中执行命令"""
     try:
-        proc = await asyncio.create_subprocess_shell(
-            cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+        kali = get_kali_client()
+        result = await kali.execute(
+            command=command,
+            args=args or [],
+            timeout=timeout
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        
+        output = result.stdout
+        if result.stderr:
+            output = f"{output}\n\nSTDERR:\n{result.stderr}" if output else result.stderr
         
         return ToolResult(
-            success=proc.returncode == 0,
-            output=stdout.decode('utf-8', errors='replace'),
-            error=stderr.decode('utf-8', errors='replace') if stderr else None
+            success=result.success,
+            output=output,
+            error=result.error
         )
-    except asyncio.TimeoutError:
-        return ToolResult(success=False, output="", error=f"命令超时 ({timeout}秒)")
     except Exception as e:
-        return ToolResult(success=False, output="", error=str(e))
+        logger.error(f"Error executing in Kali: {e}")
+        return ToolResult(success=False, output="", error=f"Kali 执行错误: {str(e)}")
+
+
+async def _run_shell_in_kali(cmd: str, timeout: int = 60) -> ToolResult:
+    """在 Kali 容器中执行 shell 命令（支持管道、重定向等）"""
+    return await _run_in_kali("sh", ["-c", cmd], timeout)
+
+
+async def _run_shell_command(cmd: str, timeout: int = 60) -> ToolResult:
+    """通用 shell 命令执行 - 现在重定向到 Kali 容器"""
+    return await _run_shell_in_kali(cmd, timeout)
+
+
+async def _ensure_tool_in_kali(tool_name: str, log_callback: Callable = None) -> bool:
+    """确保工具在 Kali 容器中已安装"""
+    try:
+        kali = get_kali_client()
+        try:
+            tool_info = await kali.get_tool_info(tool_name)
+            if tool_info.installed:
+                return True
+        except:
+            pass  # Tool not found, try to install
+        
+        # 尝试安装
+        if log_callback:
+            await log_callback("info", f"📦 在 Kali 中安装 {tool_name}...")
+        
+        installed, failed, already = await kali.install_tools([tool_name])
+        return tool_name in installed or tool_name in already
+    except Exception as e:
+        logger.error(f"Error checking/installing tool in Kali: {e}")
+        return False
 
 
 class SecurityTool:
@@ -47,11 +94,9 @@ class SecurityTool:
         return self.binary_name or self.name
     
     async def ensure_installed(self, log_callback: Callable = None) -> bool:
-        """确保工具已安装"""
+        """确保工具已安装（在 Kali 容器中）"""
         binary = self.get_binary_name()
-        if is_tool_available(binary):
-            return True
-        return await ensure_tool_available(binary, log_callback)
+        return await _ensure_tool_in_kali(binary, log_callback)
     
     async def execute(self, **kwargs) -> ToolResult:
         raise NotImplementedError
@@ -59,7 +104,7 @@ class SecurityTool:
 
 class NmapTool(SecurityTool):
     name = "nmap"
-    description = "端口扫描和服务识别工具。可以扫描特定端口、探测服务版本、执行脚本扫描等。"
+    description = "端口扫描和服务识别工具。默认扫描所有端口 (1-65535)。可以扫描特定端口、探测服务版本、执行脚本扫描等。"
     
     async def execute(
         self, 
@@ -75,7 +120,7 @@ class NmapTool(SecurityTool):
         
         Args:
             target: 扫描目标 (IP/域名)
-            ports: 端口范围，如 "80,443" 或 "1-1000"
+            ports: 端口范围，如 "80,443" 或 "1-1000"。留空则扫描所有端口 (1-65535)
             scripts: NSE 脚本，如 "http-title,http-headers"
             options: 其他选项，如 "-sV" (版本探测)
             args: 完整的命令行参数字符串（LLM 可能使用）
@@ -93,40 +138,28 @@ class NmapTool(SecurityTool):
             
             # 将 target 添加到命令末尾
             full_cmd = f"nmap {args} {target}"
-            return await _run_shell_command(full_cmd, timeout)
+            return await _run_shell_in_kali(full_cmd, timeout)
         
         # 标准参数模式
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["nmap", "-Pn", "-oX", "-"]  # -Pn 跳过主机发现，XML 输出到 stdout
+        cmd_args = ["-Pn", "-oX", "-"]  # -Pn 跳过主机发现，XML 输出到 stdout
         
+        # 如果未指定端口，默认扫描所有端口
         if ports:
-            cmd.extend(["-p", ports])
+            cmd_args.extend(["-p", ports])
+        else:
+            cmd_args.extend(["-p", "1-65535"])  # 默认扫描所有端口
+        
         if scripts:
-            cmd.extend(["--script", scripts])
+            cmd_args.extend(["--script", scripts])
         if options:
-            cmd.extend(shlex.split(options))
+            cmd_args.extend(shlex.split(options))
         
-        cmd.append(target)
+        cmd_args.append(target)
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"命令超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("nmap", cmd_args, timeout)
 
 
 class CurlTool(SecurityTool):
@@ -153,70 +186,35 @@ class CurlTool(SecurityTool):
             args: 完整的命令行参数字符串（LLM 可能使用）
             timeout: 超时时间(秒)
         """
-        cmd = ["curl"]
-        
         # 如果提供了 args，直接使用（通过 shell 执行以支持重定向等）
         if args:
             # 确保 url 参数被包含
             if not url:
                 return ToolResult(success=False, output="", error="缺少必需参数: url")
-            
-            try:
-                proc = await asyncio.create_subprocess_shell(
-                    f"curl {args} {url}",  # 添加 url 到命令末尾
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout+5)
-                
-                return ToolResult(
-                    success=proc.returncode == 0,
-                    output=stdout.decode('utf-8', errors='replace'),
-                    error=stderr.decode('utf-8', errors='replace') if stderr else None
-                )
-            except asyncio.TimeoutError:
-                return ToolResult(success=False, output="", error=f"请求超时 ({timeout}秒)")
-            except Exception as e:
-                return ToolResult(success=False, output="", error=str(e))
+            return await _run_shell_in_kali(f"curl {args} {url}", timeout+5)
         
         # 标准参数模式
         if not url:
             return ToolResult(success=False, output="", error="缺少必需参数: url")
         
-        cmd.extend(["-s", "-i", "-X", method])
-        cmd.extend(["--max-time", str(timeout)])
+        cmd_args = ["-s", "-i", "-X", method, "--max-time", str(timeout)]
         
         if headers:
             for k, v in headers.items():
-                cmd.extend(["-H", f"{k}: {v}"])
+                cmd_args.extend(["-H", f"{k}: {v}"])
         
         if data:
-            cmd.extend(["-d", data])
+            cmd_args.extend(["-d", data])
         
-        cmd.append(url)
+        cmd_args.append(url)
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout+5)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"请求超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("curl", cmd_args, timeout+5)
 
 
 class DirBusterTool(SecurityTool):
     name = "dirbuster"
     description = "目录/文件枚举工具。可以发现隐藏的目录和文件。"
+    binary_name = "gobuster"  # 实际使用 gobuster
     
     async def execute(
         self,
@@ -238,59 +236,32 @@ class DirBusterTool(SecurityTool):
         """
         # 如果提供了 args，通过 shell 执行
         if args:
-            # 确保 url 参数被包含
             if not url:
                 return ToolResult(success=False, output="", error="缺少必需参数: url")
-            return await _run_shell_command(f"gobuster {args} -u {url}", timeout)
+            return await _run_shell_in_kali(f"gobuster {args} -u {url}", timeout)
         
         if not url:
             return ToolResult(success=False, output="", error="缺少必需参数: url")
         
-        # 使用 gobuster 或 dirb
-        cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-q", "-t", "10"]
+        # 使用 gobuster
+        cmd_args = ["dir", "-u", url, "-w", wordlist, "-q", "-t", "10"]
         
         if extensions:
-            cmd.extend(["-x", extensions])
+            cmd_args.extend(["-x", extensions])
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"扫描超时 ({timeout}秒)")
-        except FileNotFoundError:
-            # 尝试使用 dirb
-            try:
-                cmd = ["dirb", url, wordlist, "-S", "-r"]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-                return ToolResult(
-                    success=proc.returncode == 0,
-                    output=stdout.decode('utf-8', errors='replace'),
-                    error=stderr.decode('utf-8', errors='replace') if stderr else None
-                )
-            except:
-                return ToolResult(success=False, output="", error="gobuster 和 dirb 均不可用")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        result = await _run_in_kali("gobuster", cmd_args, timeout)
+        
+        # 如果 gobuster 失败，尝试 dirb
+        if not result.success and "not found" in (result.error or "").lower():
+            cmd_args = [url, wordlist, "-S", "-r"]
+            return await _run_in_kali("dirb", cmd_args, timeout)
+        
+        return result
 
 
 class NucleiTool(SecurityTool):
     name = "nuclei"
-    description = "基于模板的漏洞扫描器。可以使用各种模板检测安全漏洞。"
+    description = "基于模板的漏洞扫描器。自动使用 GitHub nuclei-templates 项目的所有模板检测安全漏洞。"
     
     async def execute(
         self,
@@ -306,47 +277,37 @@ class NucleiTool(SecurityTool):
         
         Args:
             target: 目标 URL
-            templates: 模板路径或名称
+            templates: 自定义模板路径或名称（留空则使用所有官方模板）
             tags: 模板标签，如 "cve,rce"
             severity: 严重性过滤，如 "critical,high"
             args: 完整命令行参数
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 target 参数被包含
             if not target:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-            return await _run_shell_command(f"nuclei {args} -u {target}", timeout)
+            return await _run_shell_in_kali(f"nuclei {args} -u {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["nuclei", "-u", target, "-silent", "-nc"]
+        # 基础参数
+        cmd_args = ["-u", target, "-silent", "-nc"]
         
+        # 如果没有指定模板，默认使用所有官方模板
+        # nuclei 会自动从 ~/.nuclei-templates/ 加载
         if templates:
-            cmd.extend(["-t", templates])
-        if tags:
-            cmd.extend(["-tags", tags])
-        if severity:
-            cmd.extend(["-s", severity])
+            cmd_args.extend(["-t", templates])
+        else:
+            # 不指定 -t 参数，nuclei 会使用所有已安装的模板
+            pass
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"扫描超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        if tags:
+            cmd_args.extend(["-tags", tags])
+        if severity:
+            cmd_args.extend(["-s", severity])
+        
+        return await _run_in_kali("nuclei", cmd_args, timeout)
 
 
 class WhatWebTool(SecurityTool):
@@ -370,33 +331,15 @@ class WhatWebTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 target 参数被包含
             if not target:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-            return await _run_shell_command(f"whatweb {args} {target}", timeout)
+            return await _run_shell_in_kali(f"whatweb {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["whatweb", f"-a{aggression}", "--color=never", target]
-        
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"识别超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        cmd_args = [f"-a{aggression}", "--color=never", target]
+        return await _run_in_kali("whatweb", cmd_args, timeout)
 
 
 class SSLScanTool(SecurityTool):
@@ -418,33 +361,15 @@ class SSLScanTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 target 参数被包含
             if not target:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-            return await _run_shell_command(f"sslscan {args} {target}", timeout)
+            return await _run_shell_in_kali(f"sslscan {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["sslscan", "--no-colour", target]
-        
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"扫描超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        cmd_args = ["--no-colour", target]
+        return await _run_in_kali("sslscan", cmd_args, timeout)
 
 
 class SQLMapTool(SecurityTool):
@@ -474,39 +399,22 @@ class SQLMapTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 url 参数被包含
             if not url:
                 return ToolResult(success=False, output="", error="缺少必需参数: url")
-            return await _run_shell_command(f"sqlmap {args} -u {url}", timeout)
+            return await _run_shell_in_kali(f"sqlmap {args} -u '{url}'", timeout)
         
         if not url:
             return ToolResult(success=False, output="", error="缺少必需参数: url")
         
-        cmd = ["sqlmap", "-u", url, "--batch", "--output-dir=/tmp/sqlmap"]
-        cmd.extend(["--level", str(level), "--risk", str(risk)])
+        cmd_args = ["-u", url, "--batch", "--output-dir=/tmp/sqlmap"]
+        cmd_args.extend(["--level", str(level), "--risk", str(risk)])
         
         if data:
-            cmd.extend(["--data", data])
+            cmd_args.extend(["--data", data])
         if cookie:
-            cmd.extend(["--cookie", cookie])
+            cmd_args.extend(["--cookie", cookie])
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"测试超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("sqlmap", cmd_args, timeout)
 
 
 class NiktoTool(SecurityTool):
@@ -532,38 +440,21 @@ class NiktoTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 target 参数被包含
             if not target:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-            return await _run_shell_command(f"nikto {args} -h {target}", timeout)
+            return await _run_shell_in_kali(f"nikto {args} -h {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["nikto", "-h", target, "-nointeractive"]
+        cmd_args = ["-h", target, "-nointeractive"]
         
         if port:
-            cmd.extend(["-p", str(port)])
+            cmd_args.extend(["-p", str(port)])
         if ssl:
-            cmd.append("-ssl")
+            cmd_args.append("-ssl")
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"扫描超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("nikto", cmd_args, timeout)
 
 
 class HydraTool(SecurityTool):
@@ -597,57 +488,38 @@ class HydraTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # Hydra 的 target 通常在命令末尾，格式为 target service
-            # 如果提供了 target 和 service，添加它们
             if target and service:
-                return await _run_shell_command(f"hydra {args} {target} {service}", timeout)
+                return await _run_shell_in_kali(f"hydra {args} {target} {service}", timeout)
             elif target:
-                return await _run_shell_command(f"hydra {args} {target}", timeout)
+                return await _run_shell_in_kali(f"hydra {args} {target}", timeout)
             else:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-        
         
         if not target or not service:
             return ToolResult(success=False, output="", error="缺少必需参数: target 和 service")
         
-        cmd = ["hydra", "-t", "4"]  # 4 个线程
+        cmd_args = ["-t", "4"]  # 4 个线程
         
         if username:
-            cmd.extend(["-l", username])
+            cmd_args.extend(["-l", username])
         elif userlist:
-            cmd.extend(["-L", userlist])
+            cmd_args.extend(["-L", userlist])
         else:
-            cmd.extend(["-l", "admin"])  # 默认用户名
+            cmd_args.extend(["-l", "admin"])  # 默认用户名
         
         if password:
-            cmd.extend(["-p", password])
+            cmd_args.extend(["-p", password])
         elif passlist:
-            cmd.extend(["-P", passlist])
+            cmd_args.extend(["-P", passlist])
         else:
-            cmd.extend(["-P", "/usr/share/wordlists/rockyou.txt"])  # 默认密码表
+            cmd_args.extend(["-P", "/usr/share/wordlists/rockyou.txt"])  # 默认密码表
         
         if port:
-            cmd.extend(["-s", str(port)])
+            cmd_args.extend(["-s", str(port)])
         
-        cmd.extend([target, service])
+        cmd_args.extend([target, service])
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"爆破超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("hydra", cmd_args, timeout)
 
 
 class DigTool(SecurityTool):
@@ -674,36 +546,19 @@ class DigTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 domain 参数被包含
             if not domain:
                 return ToolResult(success=False, output="", error="缺少必需参数: domain")
-            return await _run_shell_command(f"dig {args} {domain}", timeout)
+            return await _run_shell_in_kali(f"dig {args} {domain}", timeout)
         
         if not domain:
             return ToolResult(success=False, output="", error="缺少必需参数: domain")
         
-        cmd = ["dig", "+noall", "+answer", domain, record_type]
+        cmd_args = ["+noall", "+answer", domain, record_type]
         
         if server:
-            cmd.insert(1, f"@{server}")
+            cmd_args.insert(0, f"@{server}")
         
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"查询超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("dig", cmd_args, timeout)
 
 
 class WhoIsTool(SecurityTool):
@@ -725,33 +580,14 @@ class WhoIsTool(SecurityTool):
             timeout: 超时时间(秒)
         """
         if args:
-            # 确保 target 参数被包含
             if not target:
                 return ToolResult(success=False, output="", error="缺少必需参数: target")
-            return await _run_shell_command(f"whois {args} {target}", timeout)
+            return await _run_shell_in_kali(f"whois {args} {target}", timeout)
         
         if not target:
             return ToolResult(success=False, output="", error="缺少必需参数: target")
         
-        cmd = ["whois", target]
-        
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=stdout.decode('utf-8', errors='replace'),
-                error=stderr.decode('utf-8', errors='replace') if stderr else None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"查询超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        return await _run_in_kali("whois", [target], timeout)
 
 
 class NetcatTool(SecurityTool):
@@ -760,17 +596,7 @@ class NetcatTool(SecurityTool):
     binary_name = "nc"
     
     def _parse_args_string(self, args_str: str) -> tuple[str, int]:
-        """从 args 字符串中解析 target 和 port
-        
-        支持格式:
-        - "127.0.0.1 80"
-        - "127.0.0.1:80"
-        - "-vz 127.0.0.1 80"
-        - "example.com 443"
-        
-        Returns:
-            (target, port) 或 (None, None)
-        """
+        """从 args 字符串中解析 target 和 port"""
         if not args_str:
             return None, None
         
@@ -808,14 +634,13 @@ class NetcatTool(SecurityTool):
             args: 完整命令行参数（会尝试智能解析）
             timeout: 超时时间(秒)
         """
-        # 智能参数解析：如果有 args 但缺少 target/port，尝试从 args 解析
+        # 智能参数解析
         if args and (not target or port is None):
             parsed_target, parsed_port = self._parse_args_string(args)
             if parsed_target and not target:
                 target = parsed_target
             if parsed_port and port is None:
                 port = parsed_port
-            # 如果成功解析出结构化参数，不再使用原始 args
             if target and port is not None:
                 logger.debug(f"NetcatTool auto-parsed: target={target}, port={port}")
                 args = None
@@ -825,11 +650,10 @@ class NetcatTool(SecurityTool):
             parts = target.rsplit(':', 1)
             if len(parts) == 2 and parts[1].isdigit():
                 target, port = parts[0], int(parts[1])
-                logger.debug(f"NetcatTool extracted port from target: {target}:{port}")
         
         # 如果仍有 args 字符串且无法解析，直接执行
         if args:
-            return await _run_shell_command(f"nc {args}", timeout)
+            return await _run_shell_in_kali(f"nc {args}", timeout)
         
         if not target or port is None:
             return ToolResult(
@@ -838,28 +662,8 @@ class NetcatTool(SecurityTool):
                 error="缺少必需参数: target 和 port。支持格式: target='127.0.0.1', port=80 或 args='127.0.0.1 80'"
             )
         
-        cmd = ["nc", "-vz", "-w", str(timeout), target, str(port)]
-        
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout+5)
-            
-            # nc 的输出通常在 stderr
-            output = stderr.decode('utf-8', errors='replace') or stdout.decode('utf-8', errors='replace')
-            
-            return ToolResult(
-                success=proc.returncode == 0,
-                output=output,
-                error=None
-            )
-        except asyncio.TimeoutError:
-            return ToolResult(success=False, output="", error=f"连接超时 ({timeout}秒)")
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
+        cmd_args = ["-vz", "-w", str(timeout), target, str(port)]
+        return await _run_in_kali("nc", cmd_args, timeout + 5)
 
 
 # 可用工具注册表

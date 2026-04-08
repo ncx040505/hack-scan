@@ -250,20 +250,35 @@ async def install_special_tool(tool_name: str, log_callback=None) -> bool:
     try:
         if tool_name == "nuclei":
             await log("安装 Nuclei...")
-            # 使用 go install 或下载预编译二进制
+            # 获取最新版本号并下载
+            # GitHub release 文件名格式: nuclei_{version}_linux_amd64.zip
             cmd = [
                 "sh", "-c",
-                "curl -sSL https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_$(uname -s)_$(uname -m).zip -o /tmp/nuclei.zip && "
-                "unzip -o /tmp/nuclei.zip -d /usr/local/bin/ && "
-                "chmod +x /usr/local/bin/nuclei && "
-                "rm /tmp/nuclei.zip"
+                """
+                VERSION=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64) ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv*) ARCH="arm" ;;
+                esac
+                OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+                URL="https://github.com/projectdiscovery/nuclei/releases/download/${VERSION}/nuclei_${VERSION#v}_${OS}_${ARCH}.zip"
+                echo "Downloading from: $URL"
+                curl -sSL "$URL" -o /tmp/nuclei.zip && \
+                unzip -o /tmp/nuclei.zip -d /usr/local/bin/ && \
+                chmod +x /usr/local/bin/nuclei && \
+                rm /tmp/nuclei.zip
+                """
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            await proc.communicate()
+            stdout, stderr = await proc.communicate()
+            logger.debug(f"Nuclei install stdout: {stdout.decode()}")
+            logger.debug(f"Nuclei install stderr: {stderr.decode()}")
             
             if proc.returncode == 0:
                 # 更新 nuclei 模板
@@ -275,14 +290,29 @@ async def install_special_tool(tool_name: str, log_callback=None) -> bool:
                 await proc2.communicate()
                 await log("✅ Nuclei 安装成功")
                 return True
+            else:
+                await log(f"❌ Nuclei 安装失败: {stderr.decode()}")
+                return False
                 
         elif tool_name == "ffuf":
             await log("安装 ffuf...")
+            # ffuf 的文件名格式: ffuf_{version}_{os}_{arch}.tar.gz
             cmd = [
                 "sh", "-c",
-                "curl -sSL https://github.com/ffuf/ffuf/releases/latest/download/ffuf_$(uname -s)_$(uname -m).tar.gz | "
-                "tar -xzf - -C /usr/local/bin/ ffuf && "
-                "chmod +x /usr/local/bin/ffuf"
+                """
+                VERSION=$(curl -s https://api.github.com/repos/ffuf/ffuf/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64) ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv*) ARCH="arm" ;;
+                esac
+                OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+                URL="https://github.com/ffuf/ffuf/releases/download/${VERSION}/ffuf_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+                echo "Downloading from: $URL"
+                curl -sSL "$URL" | tar -xzf - -C /usr/local/bin/ ffuf && \
+                chmod +x /usr/local/bin/ffuf
+                """
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -296,10 +326,22 @@ async def install_special_tool(tool_name: str, log_callback=None) -> bool:
             await log("安装 httpx...")
             cmd = [
                 "sh", "-c",
-                "curl -sSL https://github.com/projectdiscovery/httpx/releases/latest/download/httpx_$(uname -s)_$(uname -m).zip -o /tmp/httpx.zip && "
-                "unzip -o /tmp/httpx.zip -d /usr/local/bin/ && "
-                "chmod +x /usr/local/bin/httpx && "
-                "rm /tmp/httpx.zip"
+                """
+                VERSION=$(curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64) ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv*) ARCH="arm" ;;
+                esac
+                OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+                URL="https://github.com/projectdiscovery/httpx/releases/download/${VERSION}/httpx_${VERSION#v}_${OS}_${ARCH}.zip"
+                echo "Downloading from: $URL"
+                curl -sSL "$URL" -o /tmp/httpx.zip && \
+                unzip -o /tmp/httpx.zip -d /usr/local/bin/ && \
+                chmod +x /usr/local/bin/httpx && \
+                rm /tmp/httpx.zip
+                """
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -313,10 +355,22 @@ async def install_special_tool(tool_name: str, log_callback=None) -> bool:
             await log("安装 subfinder...")
             cmd = [
                 "sh", "-c",
-                "curl -sSL https://github.com/projectdiscovery/subfinder/releases/latest/download/subfinder_$(uname -s)_$(uname -m).zip -o /tmp/subfinder.zip && "
-                "unzip -o /tmp/subfinder.zip -d /usr/local/bin/ && "
-                "chmod +x /usr/local/bin/subfinder && "
-                "rm /tmp/subfinder.zip"
+                """
+                VERSION=$(curl -s https://api.github.com/repos/projectdiscovery/subfinder/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64) ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv*) ARCH="arm" ;;
+                esac
+                OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+                URL="https://github.com/projectdiscovery/subfinder/releases/download/${VERSION}/subfinder_${VERSION#v}_${OS}_${ARCH}.zip"
+                echo "Downloading from: $URL"
+                curl -sSL "$URL" -o /tmp/subfinder.zip && \
+                unzip -o /tmp/subfinder.zip -d /usr/local/bin/ && \
+                chmod +x /usr/local/bin/subfinder && \
+                rm /tmp/subfinder.zip
+                """
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd,

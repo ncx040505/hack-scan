@@ -96,6 +96,36 @@ class VulnAnalyzer:
         self.llm_available = False
         self._initialized = False
     
+    def _filter_reliable_vulnerabilities(self, vulnerabilities: list[dict]) -> list[dict]:
+        """过滤可靠的漏洞：优先使用确认的漏洞，过滤高误报率"""
+        # 首先提取所有确认的漏洞
+        confirmed = [v for v in vulnerabilities if v.get('category') == 'ai_confirmed_vulnerability']
+        
+        # 如果有确认的漏洞，主要使用它们
+        if confirmed:
+            logger.info(f"Found {len(confirmed)} confirmed vulnerabilities")
+            # 也可以包含一些低误报率的潜在漏洞作为补充
+            reliable_potential = [
+                v for v in vulnerabilities 
+                if v.get('category') != 'ai_confirmed_vulnerability' 
+                and v.get('llm_false_positive_score', 100) < 40
+            ]
+            return confirmed + reliable_potential[:5]  # 最多加5个可靠的潜在漏洞
+        
+        # 如果没有确认漏洞，只使用低误报率的潜在漏洞
+        reliable = [
+            v for v in vulnerabilities 
+            if v.get('llm_false_positive_score', 100) < 50
+        ]
+        
+        if reliable:
+            logger.info(f"No confirmed vulnerabilities, using {len(reliable)} reliable potential vulnerabilities")
+            return reliable
+        
+        # 如果所有漏洞都是高误报率，返回空列表或最多2个作为参考
+        logger.warning("All vulnerabilities have high false positive scores")
+        return vulnerabilities[:2] if vulnerabilities else []
+    
     async def _ensure_initialized(self):
         """确保 LLM 已初始化（从数据库加载配置）"""
         if self._initialized:
@@ -284,21 +314,45 @@ class VulnAnalyzer:
         # 确保已初始化
         await self._ensure_initialized()
         
+        # 过滤可靠的漏洞：优先使用确认的漏洞，过滤高误报率
+        reliable_vulns = self._filter_reliable_vulnerabilities(vulnerabilities)
+        
+        # 如果过滤后没有可靠漏洞，但有潜在漏洞，降低评分权重
+        has_confirmed = any(v.get('category') == 'ai_confirmed_vulnerability' for v in reliable_vulns)
+        
         # 如果 LLM 不可用，直接返回默认分析
         if not self.llm_available or not self.llm:
             logger.warning("LLM not available, using default attack path analysis")
-            return self._get_default_attack_path(target, vulnerabilities, open_ports)
+            return self._get_default_attack_path(target, reliable_vulns, open_ports, has_confirmed)
         
         parser = PydanticOutputParser(pydantic_object=AttackPathResult)
         
-        # 构建漏洞信息
-        vuln_info = "\n".join([
-            f"- [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}\n"
-            f"  位置: {v.get('location', 'N/A')}\n"
-            f"  类型: {v.get('category', 'N/A')}\n"
-            f"  描述: {v.get('description', 'N/A')[:200]}"
-            for v in vulnerabilities[:30]  # 限制数量
-        ]) or "未发现漏洞"
+        # 构建漏洞信息，优先展示确认的漏洞
+        confirmed_vulns = [v for v in reliable_vulns if v.get('category') == 'ai_confirmed_vulnerability']
+        potential_vulns = [v for v in reliable_vulns if v.get('category') != 'ai_confirmed_vulnerability']
+        
+        vuln_sections = []
+        if confirmed_vulns:
+            vuln_sections.append("### 已确认漏洞（高置信度）")
+            for v in confirmed_vulns[:15]:
+                vuln_sections.append(
+                    f"- [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}\n"
+                    f"  位置: {v.get('location', 'N/A')}\n"
+                    f"  类型: {v.get('category', 'N/A')}\n"
+                    f"  描述: {v.get('description', 'N/A')[:200]}"
+                )
+        
+        if potential_vulns:
+            vuln_sections.append("\n### 潜在漏洞（需进一步验证）")
+            for v in potential_vulns[:15]:
+                false_positive_score = v.get('llm_false_positive_score', 0)
+                vuln_sections.append(
+                    f"- [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')} (误报可能性: {false_positive_score}%)\n"
+                    f"  位置: {v.get('location', 'N/A')}\n"
+                    f"  类型: {v.get('category', 'N/A')}"
+                )
+        
+        vuln_info = "\n".join(vuln_sections) if vuln_sections else "未发现可靠漏洞"
         
         # 构建端口信息
         port_info = "\n".join([
@@ -318,14 +372,22 @@ class VulnAnalyzer:
    - impact (潜在影响): 攻击成功后的影响
 
 2. **攻击链构建** (attack_chains)：基于漏洞组合构建可行的攻击路径
+   - **优先基于"已确认漏洞"构建攻击链**，这些漏洞已被验证可利用
    - 每条攻击链应该是一个完整的攻击场景
    - 步骤应该是有序的、逻辑连贯的
    - 评估每条攻击链的可能性和影响
 
 3. **风险评估** (risk_assessment)：给出整体风险评估
-   - 综合考虑所有发现
+   - **已确认漏洞代表真实威胁，应给予高风险评分**
+   - **潜在漏洞可能误报，仅作为参考**
    - 识别最危险的攻击路径
    - 提供针对性的安全建议
+
+风险评分建议：
+- 存在严重级别（critical）已确认漏洞：80-100分
+- 存在高危级别（high）已确认漏洞：60-80分
+- 仅有潜在漏洞：20-40分
+- 无可靠漏洞：0-20分
 
 注意：
 - 如果没有发现严重漏洞，攻击链可以为空
@@ -358,13 +420,14 @@ class VulnAnalyzer:
         except Exception as e:
             logger.error(f"Attack path analysis failed: {e}")
             # 返回默认结果
-            return self._get_default_attack_path(target, vulnerabilities, open_ports)
+            return self._get_default_attack_path(target, reliable_vulns, open_ports, has_confirmed)
     
     def _get_default_attack_path(
         self,
         target: str,
         vulnerabilities: list[dict],
-        open_ports: list[dict]
+        open_ports: list[dict],
+        has_confirmed: bool = False
     ) -> AttackPathResult:
         """LLM 失败时生成默认的攻击路径分析"""
         # 按严重程度分类

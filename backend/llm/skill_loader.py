@@ -2,7 +2,9 @@
 import ast
 import asyncio
 import sys
+import os
 import json
+import shlex
 import zipfile
 import importlib.util
 from pathlib import Path
@@ -222,22 +224,50 @@ async def load_skills_from_db(session_factory=None) -> list[SkillInfo]:
                         continue
                     skill_type = "python"
                     
-                elif suffix == '.md':
-                    # Markdown skill
+                elif suffix == '.md' or suffix == '.txt':
+                    # Markdown/文本 skill
                     metadata = parse_markdown_skill(str(file_path))
                     skill_type = "markdown"
                     
-                elif suffix == '.zip':
-                    # SkillHub zip 包
+                elif suffix in ['.zip', '.tar', '.tar.gz', '.tgz', '.tar.bz2', '.7z']:
+                    # 压缩包 skill
                     metadata = parse_zip_skill(str(file_path))
                     if not metadata.get('has_run_function') and not metadata.get('is_descriptive'):
                         logger.warning(f"Skill {tool.name} missing run() function or description")
                         continue
-                    skill_type = "zip"
+                    skill_type = "archive"
+                    
+                elif suffix in ['.exe', '.bin', '.so', '.dylib', '.dll']:
+                    # 二进制可执行文件 skill
+                    metadata = {
+                        'name': tool.name,
+                        'description': tool.description or f"二进制工具: {tool.name}",
+                        'parameters': {
+                            'args': {
+                                'type': 'string',
+                                'description': '命令行参数',
+                                'required': False
+                            }
+                        },
+                        'is_binary': True,
+                    }
+                    skill_type = "binary"
                     
                 else:
-                    logger.warning(f"Unsupported skill file type: {suffix}")
-                    continue
+                    # 其他文件类型作为通用数据文件
+                    metadata = {
+                        'name': tool.name,
+                        'description': tool.description or f"数据文件: {tool.name} ({suffix})",
+                        'parameters': {
+                            'operation': {
+                                'type': 'string',
+                                'description': '要执行的操作',
+                                'required': True
+                            }
+                        },
+                        'is_data_file': True,
+                    }
+                    skill_type = "data"
                 
                 skill_info = SkillInfo(
                     id=tool.id,
@@ -265,7 +295,7 @@ async def execute_skill(
     """
     执行 Skill
     
-    通过动态导入并调用 skill 的 run() 函数
+    通过动态导入并调用 skill 的 run() 函数，或直接执行二进制文件
     """
     try:
         if skill.skill_type == "markdown":
@@ -277,8 +307,14 @@ async def execute_skill(
                 output=f"[Skill 参考文档]\n\n{content}\n\n请根据以上文档和用户请求 '{kwargs.get('query', '')}' 生成并执行相应操作。"
             )
         
-        elif skill.skill_type == "zip":
+        elif skill.skill_type == "archive":
             return await _execute_zip_skill(skill, kwargs, timeout)
+        
+        elif skill.skill_type == "binary":
+            return await _execute_binary_skill(skill, kwargs, timeout)
+        
+        elif skill.skill_type == "data":
+            return await _execute_data_file_skill(skill, kwargs, timeout)
         
         else:
             return await _execute_python_skill(skill, kwargs, timeout)
@@ -466,3 +502,112 @@ def get_skills_schema(skills: list[SkillInfo]) -> list[dict]:
         schemas.append(schema)
     
     return schemas
+
+
+async def _execute_binary_skill(skill: SkillInfo, kwargs: dict, timeout: int) -> SkillResult:
+    """执行二进制可执行文件 Skill - 在 Kali 容器内执行"""
+    from scanners.kali_client import KaliClient
+    
+    try:
+        # 构建命令
+        cmd_parts = [skill.file_path]
+        
+        # 添加命令行参数
+        args_str = kwargs.get('args', '')
+        if args_str:
+            cmd_parts.extend(shlex.split(args_str))
+        
+        # 构建环境变量
+        env_vars = {}
+        for key, value in kwargs.items():
+            if key != 'args':
+                env_vars[f'SKILL_{key.upper()}'] = str(value)
+        
+        # 构建完整的 shell 命令（包含环境变量）
+        env_prefix = ' '.join(f'{k}="{v}"' for k, v in env_vars.items())
+        cmd_str = ' '.join(shlex.quote(part) for part in cmd_parts)
+        
+        if env_prefix:
+            full_cmd = f"{env_prefix} {cmd_str}"
+        else:
+            full_cmd = cmd_str
+        
+        logger.info(f"Executing binary skill in Kali: {full_cmd}")
+        
+        # 在 Kali 容器内执行
+        kali_client = KaliClient()
+        result = await kali_client.execute_shell_command(full_cmd, timeout=timeout)
+        
+        return SkillResult(
+            success=result.success,
+            output=result.output,
+            error=result.error if not result.success else None
+        )
+            
+    except Exception as e:
+        logger.error(f"Binary skill execution error: {e}")
+        return SkillResult(success=False, output="", error=str(e))
+
+
+async def _execute_data_file_skill(skill: SkillInfo, kwargs: dict, timeout: int) -> SkillResult:
+    """处理数据文件 Skill - 返回文件信息供 AI 参考"""
+    try:
+        operation = kwargs.get('operation', 'info')
+        file_path = Path(skill.file_path)
+        
+        if operation == 'info':
+            # 返回文件信息
+            stat = file_path.stat()
+            info = f"""数据文件信息:
+文件名: {file_path.name}
+路径: {skill.file_path}
+大小: {stat.st_size} 字节 ({stat.st_size / 1024:.2f} KB)
+类型: {file_path.suffix}
+修改时间: {stat.st_mtime}
+
+AI 可以：
+1. 要求读取文件内容 (operation='read')
+2. 要求提取文件的特定部分
+3. 根据文件类型使用相应的工具处理
+4. 将文件作为工具的输入参数
+
+示例: {{"operation": "read", "max_bytes": 1000}}
+"""
+            return SkillResult(success=True, output=info)
+        
+        elif operation == 'read':
+            # 读取文件内容
+            max_bytes = int(kwargs.get('max_bytes', 10000))
+            
+            try:
+                with open(skill.file_path, 'rb') as f:
+                    content = f.read(max_bytes)
+                
+                # 尝试解码为文本
+                try:
+                    text = content.decode('utf-8')
+                    return SkillResult(success=True, output=f"文件内容 (前 {max_bytes} 字节):\n\n{text}")
+                except UnicodeDecodeError:
+                    # 二进制文件，返回十六进制
+                    hex_dump = content.hex()
+                    return SkillResult(
+                        success=True, 
+                        output=f"二进制文件内容 (十六进制，前 {max_bytes} 字节):\n\n{hex_dump}\n\n文件路径: {skill.file_path}"
+                    )
+            except Exception as e:
+                return SkillResult(success=False, output="", error=f"读取文件失败: {e}")
+        
+        elif operation == 'path':
+            # 返回文件路径供其他工具使用
+            return SkillResult(success=True, output=skill.file_path)
+        
+        else:
+            return SkillResult(
+                success=False,
+                output="",
+                error=f"不支持的操作: {operation}。支持的操作: info, read, path"
+            )
+            
+    except Exception as e:
+        logger.error(f"Data file skill error: {e}")
+        return SkillResult(success=False, output="", error=str(e))

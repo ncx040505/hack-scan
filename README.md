@@ -52,7 +52,6 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# 编辑 .env 设置 OPENAI_API_KEY
 
 # 启动 API
 uvicorn app.main:app --reload
@@ -67,18 +66,6 @@ cd frontend
 npm install
 npm run dev
 ```
-
-## 配置
-
-环境变量 (`.env`):
-
-| 变量 | 描述 | 默认值 |
-|------|------|--------|
-| `OPENAI_API_KEY` | OpenAI API 密钥 | - |
-| `OPENAI_BASE_URL` | 自定义 API 端点 (可选) | - |
-| `LLM_MODEL` | 使用的模型 | gpt-4o |
-| `POSTGRES_URL` | PostgreSQL 连接 | localhost:5432 |
-| `REDIS_URL` | Redis 连接 | localhost:6379 |
 
 ## API 示例
 
@@ -105,7 +92,3 @@ curl http://localhost:8000/api/v1/scans/{scan_id}/vulnerabilities
 1. **仅扫描授权目标** - 未经授权的扫描可能违法
 2. **控制扫描频率** - 避免 DoS 目标服务器
 3. **数据脱敏** - 不要将敏感数据发送给公有云 LLM
-
-## License
-
-MIT

@@ -1,4 +1,3 @@
-"""Security Tools / Knowledgebase API endpoints"""
 import os
 import uuid
 import shutil
@@ -26,9 +25,22 @@ ALLOWED_EXTENSIONS = {
     "nuclei": [".yaml", ".yml"],
     "wordlist": [".txt", ".lst", ".dic", ".list"],
     "config": [".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".cfg", ".xml"],
-    "skill": [".py", ".md", ".zip"],  # AI Skill 支持 Python 脚本、Markdown 和 SkillHub zip 包
+    "skill": [
+        # 文本格式
+        ".py", ".md", ".txt", ".json", ".yaml", ".yml",
+        # 脚本文件
+        ".sh", ".bash", ".pl", ".rb", ".js", ".ts", ".go", ".rs", ".ps1",
+        # 压缩包
+        ".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".7z", ".rar",
+        # 二进制可执行文件
+        ".exe", ".dll", ".so", ".dylib", ".bin",
+        # 其他二进制格式
+        ".jar", ".class", ".pyc", ".wasm",
+        # 数据文件
+        ".db", ".sqlite", ".sqlite3", ".dat", ".csv", ".xml",
+    ],
 }
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB（从 10MB 增加到 100MB）
 
 
 def ensure_tools_dir():
@@ -41,6 +53,12 @@ def ensure_tools_dir():
 def validate_file_extension(filename: str, tool_type: str) -> bool:
     """验证文件扩展名"""
     ext = Path(filename).suffix.lower()
+    
+    # 对于 skill 类型，如果没有扩展名，认为是二进制可执行文件
+    if tool_type == "skill" and not ext:
+        logger.info(f"File without extension for skill type: {filename}, treating as binary")
+        return True
+    
     allowed = ALLOWED_EXTENSIONS.get(tool_type, [])
     return ext in allowed
 
@@ -89,6 +107,12 @@ async def upload_tool(
     # 生成安全的文件名
     tool_id = str(uuid.uuid4())
     ext = Path(file.filename).suffix
+    
+    # 对于没有扩展名的 skill 文件，添加 .bin 扩展名
+    if tool_type == "skill" and not ext:
+        ext = ".bin"
+        logger.info(f"No extension for skill file, using .bin: {file.filename}")
+    
     safe_filename = f"{tool_id}{ext}"
     file_path = TOOLS_DIR / tool_type / safe_filename
     
@@ -97,6 +121,16 @@ async def upload_tool(
         async with aiofiles.open(file_path, 'wb') as f:
             content = await file.read()
             await f.write(content)
+        
+        # 为特定类型的文件设置执行权限
+        if tool_type in ['skill', 'script']:
+            executable_extensions = ['.sh', '.bash', '.pl', '.rb', '.py', '.js', '.bin', '.exe', '']
+            file_ext = Path(file_path).suffix
+            # 无扩展名或特定扩展名的文件设置为可执行
+            if not file_ext or file_ext in executable_extensions:
+                os.chmod(file_path, 0o755)
+                logger.info(f"Set executable permission for {file_path}")
+                
     except Exception as e:
         logger.error(f"Failed to save tool file: {e}")
         raise HTTPException(status_code=500, detail="文件保存失败")

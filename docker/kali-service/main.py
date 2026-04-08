@@ -34,6 +34,14 @@ class ExecuteRequest(BaseModel):
     env: Optional[Dict[str, str]] = Field(default=None, description="环境变量")
 
 
+class ShellCommandRequest(BaseModel):
+    """Shell 命令执行请求"""
+    command: str = Field(..., description="要执行的 shell 命令字符串")
+    timeout: int = Field(default=300, ge=1, le=3600, description="超时时间（秒）")
+    cwd: Optional[str] = Field(default=None, description="工作目录")
+    env: Optional[Dict[str, str]] = Field(default=None, description="环境变量")
+
+
 class ExecuteResponse(BaseModel):
     """命令执行响应"""
     success: bool
@@ -316,6 +324,69 @@ async def execute_command(request: ExecuteRequest):
     except Exception as e:
         duration = (datetime.now() - start_time).total_seconds()
         logger.error(f"Command execution error: {e}")
+        return ExecuteResponse(
+            success=False,
+            returncode=-1,
+            stdout="",
+            stderr="",
+            duration=duration,
+            error=str(e)
+        )
+
+
+@app.post("/execute_shell", response_model=ExecuteResponse)
+async def execute_shell_command(request: ShellCommandRequest):
+    """执行 shell 命令（支持管道、重定向等）"""
+    logger.info(f"Executing shell command: {request.command[:100]}...")
+    
+    start_time = datetime.now()
+    
+    try:
+        # 构建环境变量
+        env = os.environ.copy()
+        if request.env:
+            env.update(request.env)
+        
+        # 使用 shell 执行命令
+        proc = await asyncio.create_subprocess_shell(
+            request.command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=request.cwd,
+            env=env
+        )
+        
+        # 等待执行完成
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=request.timeout
+        )
+        
+        duration = (datetime.now() - start_time).total_seconds()
+        
+        return ExecuteResponse(
+            success=proc.returncode == 0,
+            returncode=proc.returncode,
+            stdout=stdout.decode('utf-8', errors='replace'),
+            stderr=stderr.decode('utf-8', errors='replace'),
+            duration=duration
+        )
+    
+    except asyncio.TimeoutError:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.error(f"Shell command timeout: {request.command[:100]}")
+        return ExecuteResponse(
+            success=False,
+            returncode=-1,
+            stdout="",
+            stderr="",
+            duration=duration,
+            error=f"Command timeout after {request.timeout}s"
+        )
+    
+    except Exception as e:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.error(f"Shell command execution error: {e}")
         return ExecuteResponse(
             success=False,
             returncode=-1,

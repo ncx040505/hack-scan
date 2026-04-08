@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { AlertTriangle, Clock, CheckCircle, Brain, Loader2, ChevronDown, ChevronUp, ChevronRight, Terminal, Bot, Wrench, AlertCircle, CheckCircle2, Info, XCircle, Trash2, MessageCircle, Send, Pause, MessageSquare, Server, Eye, EyeOff, Shield, FileText, Route, ShieldCheck, RefreshCw } from 'lucide-react'
-import { getScan, getVulnerabilities, getScanProgress, getScanLogs, cancelScan, deleteScan, getScanMessages, sendScanMessage, getScanChatHistory, sendScanChatMessage, getAttackPath, Vulnerability, ScanLogEntry, AttackPathData, AttackPhase as APIAttackPhase, AttackChain, RiskAssessment } from '../lib/api'
+import { AlertTriangle, CheckCircle, Brain, Loader2, ChevronDown, ChevronUp, ChevronRight, Terminal, Bot, Wrench, AlertCircle, CheckCircle2, Info, XCircle, Trash2, MessageCircle, Send, Pause, MessageSquare, Server, Eye, Shield, FileText, Route, ShieldCheck, RefreshCw, Download, Key, Settings, ChevronLeft } from 'lucide-react'
+import { getScan, getVulnerabilities, getScanProgress, getScanLogs, cancelScan, deleteScan, getScanMessages, sendScanMessage, getScanChatHistory, sendScanChatMessage, getAttackPath, Vulnerability, ScanLogEntry, AttackChain } from '../lib/api'
 import SeverityBadge from '../components/SeverityBadge'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 const statusLabels: Record<string, string> = {
   PENDING: '等待中',
@@ -74,7 +74,7 @@ export default function ScanDetail() {
     queryKey: ['scan-logs', scanId, logIndex],
     queryFn: () => getScanLogs(scanId!, logIndex),
     enabled: !!scanId,
-    refetchInterval: (query) => {
+    refetchInterval: () => {
       // Keep polling for logs while scan is running or just completed
       return scan?.status === 'RUNNING' || scan?.status === 'PENDING' ? 1000 : false
     },
@@ -326,14 +326,12 @@ function TabVulnerabilities({
   scan,
   vulns,
   vulnsLoading,
-  showVulns,
-  setShowVulns,
 }: {
   scan: any
   vulns: any
   vulnsLoading: boolean
-  showVulns: boolean
-  setShowVulns: (v: boolean) => void
+  showVulns?: boolean
+  setShowVulns?: (v: boolean) => void
 }) {
   const openPorts = vulns?.items.filter((v: Vulnerability) => v.name.startsWith('Open port:')) || []
   const actualVulns = vulns?.items.filter((v: Vulnerability) => !v.name.startsWith('Open port:')) || []
@@ -769,7 +767,7 @@ function AttackChainCard({ chain }: { chain: AttackChain }) {
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
           <div className="pt-4 space-y-3">
-            {chain.steps.map((step, i) => (
+            {chain.steps.map((step: { order: number; action: string; vulnerability?: string; result?: string }, i: number) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
                   {step.order}
@@ -864,129 +862,226 @@ function AttackPhaseCard({ phase, index }: { phase: AttackPhaseUI; index: number
   )
 }
 
-// 攻击路径流程图组件
-function AttackPathFlow({ vuln, openPorts }: { vuln: Vulnerability; openPorts: Vulnerability[] }) {
-  // 尝试匹配相关端口
-  const relatedPort = openPorts.find(p =>
-    vuln.location?.includes(p.location?.split(':')[1]?.split('/')[0] || 'xxx')
-  )
-
-  return (
-    <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-      <div className="flex items-center gap-2 mb-3">
-        <SeverityBadge severity={vuln.severity} />
-        <span className="font-medium">{vuln.name}</span>
-      </div>
-
-      {/* 流程图 */}
-      <div className="flex items-center gap-2 flex-wrap text-sm">
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg">
-          <Server className="w-4 h-4" />
-          <span>目标主机</span>
-        </div>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
-
-        {relatedPort && (
-          <>
-            <div className="flex items-center gap-1 px-3 py-1.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded-lg">
-              <Terminal className="w-4 h-4" />
-              <span>{relatedPort.location || '开放端口'}</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </>
-        )}
-
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded-lg">
-          <AlertTriangle className="w-4 h-4" />
-          <span className="truncate max-w-[150px]" title={vuln.name}>{vuln.name}</span>
-        </div>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
-
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg">
-          <XCircle className="w-4 h-4" />
-          <span>系统入侵</span>
-        </div>
-      </div>
-
-      {vuln.location && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-          位置: {vuln.location}
-        </p>
-      )}
-    </div>
-  )
-}
-
 function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
   const actualVulns = vulns?.items.filter((v: Vulnerability) => !v.name.startsWith('Open port:')) || []
+  const [exportFormat, setExportFormat] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
+
+  // 按严重程度分组
+  const criticalVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'critical')
+  const highVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'high')
+  const mediumVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'medium')
+  const lowVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'low')
+
+  // 导出报告
+  const handleExport = async (format: string) => {
+    setIsExporting(true)
+    setExportFormat(format)
+    
+    try {
+      const reportData = {
+        scan: {
+          id: scan.id,
+          target: scan.target,
+          scan_type: scan.scan_type,
+          status: scan.status,
+          started_at: scan.started_at,
+          completed_at: scan.completed_at,
+          risk_score: scan.llm_risk_score,
+          summary: scan.llm_summary,
+        },
+        statistics: {
+          total: actualVulns.length,
+          critical: criticalVulns.length,
+          high: highVulns.length,
+          medium: mediumVulns.length,
+          low: lowVulns.length,
+        },
+        vulnerabilities: actualVulns.map((v: Vulnerability) => ({
+          name: v.name,
+          severity: v.severity,
+          category: v.category,
+          location: v.location,
+          description: v.description,
+          evidence: v.evidence,
+          analysis: v.llm_analysis,
+          remediation: v.llm_remediation,
+        })),
+      }
+
+      let content = ''
+      let filename = `vulnerability-report-${scan.id.slice(0, 8)}`
+      let mimeType = 'text/plain'
+
+      switch (format) {
+        case 'markdown':
+          content = generateMarkdownReport(reportData)
+          filename += '.md'
+          mimeType = 'text/markdown'
+          break
+        case 'json':
+          content = JSON.stringify(reportData, null, 2)
+          filename += '.json'
+          mimeType = 'application/json'
+          break
+        case 'csv':
+          content = generateCSVReport(reportData)
+          filename += '.csv'
+          mimeType = 'text/csv'
+          break
+        case 'html':
+          content = generateHTMLReport(reportData)
+          filename += '.html'
+          mimeType = 'text/html'
+          break
+        default:
+          content = generateMarkdownReport(reportData)
+          filename += '.md'
+      }
+
+      // 下载文件
+      const blob = new Blob([content], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setIsExporting(false)
+      setExportFormat(null)
+    }
+  }
 
   return (
     <>
-      {/* LLM Summary */}
-      {scan.llm_summary && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow">
-          <div className="flex items-center gap-2 mb-3">
-            <Brain className="w-5 h-5 text-purple-500" />
-            <h2 className="font-semibold">AI 分析摘要</h2>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{scan.llm_summary}</p>
-        </div>
-      )}
+      {/* 漏洞信息与统计（合并区域） */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+        {/* 头部：风险评分和统计 */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            {/* 风险评分 */}
+            {scan.llm_risk_score !== null && scan.llm_risk_score !== undefined && (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className={`w-6 h-6 ${
+                    scan.llm_risk_score >= 80 ? 'text-red-500' :
+                    scan.llm_risk_score >= 60 ? 'text-orange-500' :
+                    scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
+                  }`} />
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">风险评分</p>
+                    <p className={`text-2xl font-bold ${
+                      scan.llm_risk_score >= 80 ? 'text-red-500' :
+                      scan.llm_risk_score >= 60 ? 'text-orange-500' :
+                      scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
+                    }`}>{scan.llm_risk_score}/100</p>
+                  </div>
+                </div>
+                <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      scan.llm_risk_score >= 80 ? 'bg-red-500' :
+                      scan.llm_risk_score >= 60 ? 'bg-orange-500' :
+                      scan.llm_risk_score >= 40 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${scan.llm_risk_score}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
-      {/* Risk Score */}
-      {scan.llm_risk_score !== null && scan.llm_risk_score !== undefined && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow">
-          <div className="flex items-center justify-between">
+            {/* 漏洞统计 */}
+            <div className="flex items-center gap-3">
+              <div className="text-center px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded">
+                <p className="text-lg font-bold">{actualVulns.length}</p>
+                <p className="text-xs text-gray-500">总计</p>
+              </div>
+              <div className="text-center px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded">
+                <p className="text-lg font-bold text-red-600">{criticalVulns.length}</p>
+                <p className="text-xs text-red-600">严重</p>
+              </div>
+              <div className="text-center px-3 py-1 bg-orange-100 dark:bg-orange-900/30 rounded">
+                <p className="text-lg font-bold text-orange-600">{highVulns.length}</p>
+                <p className="text-xs text-orange-600">高危</p>
+              </div>
+              <div className="text-center px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded">
+                <p className="text-lg font-bold text-yellow-600">{mediumVulns.length}</p>
+                <p className="text-xs text-yellow-600">中危</p>
+              </div>
+              <div className="text-center px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded">
+                <p className="text-lg font-bold text-blue-600">{lowVulns.length}</p>
+                <p className="text-xs text-blue-600">低危</p>
+              </div>
+            </div>
+
+            {/* 导出按钮 */}
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-orange-500" />
-              <h2 className="font-semibold">风险评分</h2>
-            </div>
-            <RiskScore score={scan.llm_risk_score} />
-          </div>
-          <div className="mt-4">
-            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 ${scan.llm_risk_score >= 80 ? 'bg-red-500' :
-                    scan.llm_risk_score >= 60 ? 'bg-orange-500' :
-                      scan.llm_risk_score >= 40 ? 'bg-yellow-500' :
-                        'bg-green-500'
-                  }`}
-                style={{ width: `${scan.llm_risk_score}%` }}
-              />
+              <div className="relative group">
+                <button className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                  <Download className="w-4 h-4" />
+                  导出报告
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 hidden group-hover:block z-10">
+                  {['markdown', 'html', 'json', 'csv'].map(fmt => (
+                    <button
+                      key={fmt}
+                      onClick={() => handleExport(fmt)}
+                      disabled={isExporting}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                    >
+                      <FileText className="w-4 h-4" />
+                      {fmt.toUpperCase()}
+                      {isExporting && exportFormat === fmt && <Loader2 className="w-4 h-4 animate-spin" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Vulnerability Stats */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-5 h-5 text-blue-500" />
-          <h2 className="font-semibold">漏洞统计</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">{actualVulns.length}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">总漏洞数</p>
+        {/* AI 分析摘要（结构化格式） */}
+        {scan.llm_summary && (
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-4">
+              <Brain className="w-5 h-5 text-purple-500" />
+              <h3 className="font-semibold">AI 分析摘要</h3>
+            </div>
+            <div className="prose dark:prose-invert max-w-none">
+              <div className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{scan.llm_summary}</div>
+            </div>
           </div>
-          <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <p className="text-3xl font-bold text-red-500">{actualVulns.filter((v: Vulnerability) => v.severity === 'critical').length}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">严重</p>
-          </div>
-          <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-            <p className="text-3xl font-bold text-orange-500">{actualVulns.filter((v: Vulnerability) => v.severity === 'high').length}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">高危</p>
-          </div>
-          <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-            <p className="text-3xl font-bold text-yellow-500">{actualVulns.filter((v: Vulnerability) => v.severity === 'medium').length}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">中危</p>
-          </div>
+        )}
+
+        {/* 漏洞详情列表 */}
+        <div className="p-6">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-500" />
+            漏洞详情
+          </h3>
+          
+          {actualVulns.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Shield className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>未发现漏洞</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {actualVulns.map((vuln: Vulnerability, index: number) => (
+                <VulnerabilityCard key={vuln.id} vuln={vuln} index={index + 1} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* 没有报告时的空状态 */}
-      {!scan.llm_summary && scan.llm_risk_score === null && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center shadow mt-6">
+      {!scan.llm_summary && scan.llm_risk_score === null && actualVulns.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center shadow">
           <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
           <p className="text-gray-500 dark:text-gray-400">扫描完成后将生成 AI 分析报告</p>
         </div>
@@ -995,28 +1090,431 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
   )
 }
 
+// 漏洞卡片组件 - 结构化显示
+function VulnerabilityCard({ vuln, index }: { vuln: Vulnerability; index: number }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400 w-6">{index}.</span>
+          <SeverityBadge severity={vuln.severity} />
+          <div>
+            <h4 className="font-medium">{vuln.name}</h4>
+            {vuln.location && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{vuln.location}</p>
+            )}
+          </div>
+        </div>
+        {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
+          {/* 基本信息 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">漏洞类型</p>
+              <p className="text-sm">{vuln.category || '未分类'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">影响位置</p>
+              <p className="text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{vuln.location || '-'}</p>
+            </div>
+          </div>
+
+          {/* 漏洞描述 */}
+          {vuln.description && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">漏洞描述</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.description}</p>
+            </div>
+          )}
+
+          {/* 证据 */}
+          {vuln.evidence && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">发现证据</p>
+              <pre className="text-xs bg-gray-100 dark:bg-gray-700 p-3 rounded overflow-x-auto whitespace-pre-wrap">{vuln.evidence}</pre>
+            </div>
+          )}
+
+          {/* AI 分析 */}
+          {vuln.llm_analysis && (
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 mb-2 text-sm font-medium">
+                <Brain className="w-4 h-4" />
+                AI 分析
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.llm_analysis}</p>
+            </div>
+          )}
+
+          {/* 修复建议 */}
+          {vuln.llm_remediation && (
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400 mb-2 text-sm font-medium">
+                <ShieldCheck className="w-4 h-4" />
+                修复建议
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.llm_remediation}</p>
+            </div>
+          )}
+
+          {/* 误报评分 */}
+          {vuln.llm_false_positive_score !== null && vuln.llm_false_positive_score !== undefined && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">误报可能性:</span>
+              <span className={`font-medium ${
+                vuln.llm_false_positive_score > 70 ? 'text-yellow-600' :
+                vuln.llm_false_positive_score > 40 ? 'text-orange-600' : 'text-green-600'
+              }`}>{vuln.llm_false_positive_score}%</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 生成 Markdown 报告
+function generateMarkdownReport(data: any): string {
+  let md = `# 漏洞扫描报告
+
+## 扫描信息
+- **目标**: ${data.scan.target}
+- **扫描类型**: ${data.scan.scan_type}
+- **状态**: ${data.scan.status}
+- **开始时间**: ${data.scan.started_at || '-'}
+- **完成时间**: ${data.scan.completed_at || '-'}
+- **风险评分**: ${data.scan.risk_score ?? '-'}/100
+
+## 漏洞统计
+| 严重程度 | 数量 |
+|---------|------|
+| 严重 | ${data.statistics.critical} |
+| 高危 | ${data.statistics.high} |
+| 中危 | ${data.statistics.medium} |
+| 低危 | ${data.statistics.low} |
+| **总计** | **${data.statistics.total}** |
+
+## AI 分析摘要
+${data.scan.summary || '暂无分析摘要'}
+
+## 漏洞详情
+`
+  data.vulnerabilities.forEach((v: any, i: number) => {
+    md += `
+### ${i + 1}. ${v.name}
+- **严重程度**: ${v.severity}
+- **类型**: ${v.category || '未分类'}
+- **位置**: ${v.location || '-'}
+
+**描述**: ${v.description || '-'}
+
+${v.evidence ? `**证据**:\n\`\`\`\n${v.evidence}\n\`\`\`\n` : ''}
+${v.analysis ? `**AI 分析**: ${v.analysis}\n` : ''}
+${v.remediation ? `**修复建议**: ${v.remediation}\n` : ''}
+---
+`
+  })
+
+  return md
+}
+
+// 生成 CSV 报告
+function generateCSVReport(data: any): string {
+  const headers = ['序号', '漏洞名称', '严重程度', '类型', '位置', '描述', '修复建议']
+  const rows = data.vulnerabilities.map((v: any, i: number) => [
+    i + 1,
+    `"${(v.name || '').replace(/"/g, '""')}"`,
+    v.severity,
+    v.category || '',
+    `"${(v.location || '').replace(/"/g, '""')}"`,
+    `"${(v.description || '').replace(/"/g, '""')}"`,
+    `"${(v.remediation || '').replace(/"/g, '""')}"`,
+  ])
+
+  return [headers.join(','), ...rows.map((r: (string | number)[]) => r.join(','))].join('\n')
+}
+
+// 生成 HTML 报告
+function generateHTMLReport(data: any): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>漏洞扫描报告 - ${data.scan.target}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 30px; }
+    h1 { color: #1a1a1a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+    h2 { color: #374151; margin-top: 30px; }
+    .stats { display: flex; gap: 20px; margin: 20px 0; }
+    .stat-box { padding: 15px 25px; border-radius: 8px; text-align: center; }
+    .stat-critical { background: #fef2f2; color: #dc2626; }
+    .stat-high { background: #fff7ed; color: #ea580c; }
+    .stat-medium { background: #fefce8; color: #ca8a04; }
+    .stat-low { background: #eff6ff; color: #2563eb; }
+    .stat-total { background: #f3f4f6; color: #374151; }
+    .stat-box .number { font-size: 24px; font-weight: bold; }
+    .stat-box .label { font-size: 12px; margin-top: 5px; }
+    .vuln-card { border: 1px solid #e5e7eb; border-radius: 8px; margin: 15px 0; overflow: hidden; }
+    .vuln-header { padding: 15px; background: #f9fafb; display: flex; align-items: center; gap: 10px; }
+    .severity-badge { padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .severity-critical { background: #dc2626; color: white; }
+    .severity-high { background: #ea580c; color: white; }
+    .severity-medium { background: #ca8a04; color: white; }
+    .severity-low { background: #2563eb; color: white; }
+    .vuln-body { padding: 15px; }
+    .vuln-body p { margin: 10px 0; }
+    .label { color: #6b7280; font-size: 12px; text-transform: uppercase; }
+    pre { background: #f3f4f6; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    .remediation { background: #ecfdf5; border: 1px solid #a7f3d0; padding: 15px; border-radius: 8px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛡️ 漏洞扫描报告</h1>
+    
+    <h2>扫描信息</h2>
+    <p><strong>目标:</strong> ${data.scan.target}</p>
+    <p><strong>扫描类型:</strong> ${data.scan.scan_type}</p>
+    <p><strong>风险评分:</strong> ${data.scan.risk_score ?? '-'}/100</p>
+    
+    <h2>漏洞统计</h2>
+    <div class="stats">
+      <div class="stat-box stat-total"><div class="number">${data.statistics.total}</div><div class="label">总计</div></div>
+      <div class="stat-box stat-critical"><div class="number">${data.statistics.critical}</div><div class="label">严重</div></div>
+      <div class="stat-box stat-high"><div class="number">${data.statistics.high}</div><div class="label">高危</div></div>
+      <div class="stat-box stat-medium"><div class="number">${data.statistics.medium}</div><div class="label">中危</div></div>
+      <div class="stat-box stat-low"><div class="number">${data.statistics.low}</div><div class="label">低危</div></div>
+    </div>
+    
+    ${data.scan.summary ? `<h2>AI 分析摘要</h2><p>${data.scan.summary}</p>` : ''}
+    
+    <h2>漏洞详情</h2>
+    ${data.vulnerabilities.map((v: any, i: number) => `
+    <div class="vuln-card">
+      <div class="vuln-header">
+        <span class="severity-badge severity-${v.severity}">${v.severity.toUpperCase()}</span>
+        <strong>${i + 1}. ${v.name}</strong>
+      </div>
+      <div class="vuln-body">
+        <p><span class="label">位置:</span> ${v.location || '-'}</p>
+        <p><span class="label">描述:</span> ${v.description || '-'}</p>
+        ${v.evidence ? `<p><span class="label">证据:</span></p><pre>${v.evidence}</pre>` : ''}
+        ${v.remediation ? `<div class="remediation"><strong>🔧 修复建议:</strong><p>${v.remediation}</p></div>` : ''}
+      </div>
+    </div>
+    `).join('')}
+  </div>
+</body>
+</html>`
+}
+
 function TabRemediation({ scanId, scan, vulns }: { scanId: string; scan: any; vulns: any }) {
   const actualVulns = vulns?.items.filter((v: Vulnerability) => !v.name.startsWith('Open port:')) || []
   const vulnsWithRemediation = actualVulns.filter((v: Vulnerability) => v.llm_remediation)
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 5
+  const totalPages = Math.ceil(vulnsWithRemediation.length / pageSize)
+  
+  // 当前页的漏洞
+  const paginatedVulns = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return vulnsWithRemediation.slice(start, start + pageSize)
+  }, [vulnsWithRemediation, currentPage])
+
+  // 认证配置状态
+  const [showAuthConfig, setShowAuthConfig] = useState(false)
+  const [authConfig, setAuthConfig] = useState({
+    host: scan?.target || '',
+    username: '',
+    password: '',
+    port: '22',
+    authType: 'password' as 'password' | 'key',
+    privateKey: '',
+  })
+
+  // 自动修复对话状态
+  const [showRemediationChat, setShowRemediationChat] = useState(false)
+  const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null)
+
+  const startRemediation = (vuln: Vulnerability) => {
+    setSelectedVuln(vuln)
+    setShowRemediationChat(true)
+  }
 
   return (
     <>
-      {/* Remediation Summary */}
+      {/* 认证配置模态框 */}
+      {showAuthConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-blue-500" />
+                <h3 className="font-semibold">目标服务器认证配置</h3>
+              </div>
+              <button onClick={() => setShowAuthConfig(false)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">目标主机</label>
+                <input
+                  type="text"
+                  value={authConfig.host}
+                  onChange={e => setAuthConfig({ ...authConfig, host: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                  placeholder="例如: 10.0.5.11"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">用户名</label>
+                  <input
+                    type="text"
+                    value={authConfig.username}
+                    onChange={e => setAuthConfig({ ...authConfig, username: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                    placeholder="root"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">端口</label>
+                  <input
+                    type="text"
+                    value={authConfig.port}
+                    onChange={e => setAuthConfig({ ...authConfig, port: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                    placeholder="22"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">认证方式</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={authConfig.authType === 'password'}
+                      onChange={() => setAuthConfig({ ...authConfig, authType: 'password' })}
+                    />
+                    <span className="text-sm">密码</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={authConfig.authType === 'key'}
+                      onChange={() => setAuthConfig({ ...authConfig, authType: 'key' })}
+                    />
+                    <span className="text-sm">私钥</span>
+                  </label>
+                </div>
+              </div>
+              {authConfig.authType === 'password' ? (
+                <div>
+                  <label className="block text-sm font-medium mb-1">密码</label>
+                  <input
+                    type="password"
+                    value={authConfig.password}
+                    onChange={e => setAuthConfig({ ...authConfig, password: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                    placeholder="••••••••"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium mb-1">私钥</label>
+                  <textarea
+                    value={authConfig.privateKey}
+                    onChange={e => setAuthConfig({ ...authConfig, privateKey: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 font-mono text-xs"
+                    rows={5}
+                    placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                  />
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  onClick={() => setShowAuthConfig(false)}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => setShowAuthConfig(false)}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  保存配置
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 自动修复对话框 */}
+      {showRemediationChat && selectedVuln && (
+        <RemediationChatDialog
+          scanId={scanId}
+          vuln={selectedVuln}
+          authConfig={authConfig}
+          onClose={() => {
+            setShowRemediationChat(false)
+            setSelectedVuln(null)
+          }}
+        />
+      )}
+
+      {/* 头部工具栏 */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-green-500" />
+          <h2 className="font-semibold">漏洞加固</h2>
+          <span className="text-sm text-gray-500">({vulnsWithRemediation.length} 条修复建议)</span>
+        </div>
+        <button
+          onClick={() => setShowAuthConfig(true)}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+          配置目标认证
+        </button>
+      </div>
+
+      {/* 修复建议列表（分页） */}
       {vulnsWithRemediation.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow mb-6">
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-green-500" />
-            <h2 className="font-semibold">修复建议汇总</h2>
-            <span className="text-sm text-gray-500">({vulnsWithRemediation.length} 条)</span>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {vulnsWithRemediation.map((vuln: Vulnerability) => (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[500px] overflow-y-auto">
+            {paginatedVulns.map((vuln: Vulnerability) => (
               <div key={vuln.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <SeverityBadge severity={vuln.severity} />
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 dark:text-white">{vuln.name}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{vuln.location}</p>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-medium text-gray-900 dark:text-white">{vuln.name}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{vuln.location}</p>
+                      </div>
+                      <button
+                        onClick={() => startRemediation(vuln)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
+                      >
+                        <Wrench className="w-4 h-4" />
+                        自动修复
+                      </button>
+                    </div>
                     <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                       <div className="flex items-center gap-1 text-green-600 dark:text-green-400 mb-1 text-sm font-medium">
                         <ShieldCheck className="w-4 h-4" />
@@ -1029,6 +1527,32 @@ function TabRemediation({ scanId, scan, vulns }: { scanId: string; scan: any; vu
               </div>
             ))}
           </div>
+          
+          {/* 分页控件 */}
+          {totalPages > 1 && (
+            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                显示 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, vulnsWithRemediation.length)} / {vulnsWithRemediation.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm">{currentPage} / {totalPages}</span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1047,6 +1571,162 @@ function TabRemediation({ scanId, scan, vulns }: { scanId: string; scan: any; vu
         <ScanChatPanel scanId={scanId} />
       )}
     </>
+  )
+}
+
+// 自动修复对话组件
+function RemediationChatDialog({
+  scanId,
+  vuln,
+  authConfig,
+  onClose,
+}: {
+  scanId: string
+  vuln: Vulnerability
+  authConfig: any
+  onClose: () => void
+}) {
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 初始化修复对话
+  useEffect(() => {
+    const initMessage = `我需要帮助修复以下漏洞：
+
+**漏洞名称**: ${vuln.name}
+**严重程度**: ${vuln.severity}
+**位置**: ${vuln.location || '未知'}
+**描述**: ${vuln.description || vuln.llm_analysis || '无描述'}
+
+**建议的修复方案**: ${vuln.llm_remediation || '暂无建议'}
+
+目标服务器信息:
+- 主机: ${authConfig.host || '未配置'}
+- 用户: ${authConfig.username || '未配置'}
+- 端口: ${authConfig.port || '22'}
+
+请帮我分析这个漏洞，并提供具体的修复步骤。如果需要执行命令，请先告诉我要执行的命令，我确认后再执行。`
+
+    setMessages([
+      { role: 'user', content: initMessage },
+      { role: 'assistant', content: `正在分析漏洞 "${vuln.name}"...
+
+根据漏洞信息，以下是修复建议：
+
+${vuln.llm_remediation || '暂无自动生成的修复建议，我会根据漏洞特征提供修复方案。'}
+
+**修复步骤**:
+1. 首先，建议备份相关配置文件
+2. ${vuln.severity === 'critical' || vuln.severity === 'high' ? '由于这是高危漏洞，建议立即进行修复' : '可以按计划安排修复时间'}
+3. 修复后需要验证漏洞是否已被修复
+
+请问您想要：
+- 查看详细的修复命令
+- 让我帮您生成修复脚本
+- 直接执行修复操作（需要确认服务器认证）
+
+请告诉我您的选择，或者询问任何其他问题。` },
+    ])
+  }, [vuln, authConfig])
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return
+
+    const userMessage = input.trim()
+    setInput('')
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    setIsLoading(true)
+
+    try {
+      // 调用后端 API 进行对话
+      const response = await sendScanChatMessage(scanId, userMessage)
+      setMessages(prev => [...prev, { role: 'assistant', content: response.content }])
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '抱歉，处理您的请求时出现错误。请稍后重试。',
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        {/* 头部 */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bot className="w-5 h-5 text-green-500" />
+            <h3 className="font-semibold">AI 修复助手</h3>
+            <SeverityBadge severity={vuln.severity} />
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 消息列表 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  msg.role === 'user'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                }`}
+              >
+                <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 输入框 */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && sendMessage()}
+              placeholder="输入消息，或询问修复相关问题..."
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+              disabled={isLoading}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={isLoading || !input.trim()}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1074,16 +1754,6 @@ function StatBox({ label, value, color = '' }: { label: string; value: number; c
       <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
     </div>
   )
-}
-
-function RiskScore({ score }: { score: number }) {
-  const color =
-    score >= 80 ? 'text-red-500' :
-      score >= 60 ? 'text-orange-500' :
-        score >= 40 ? 'text-yellow-500' :
-          'text-green-500'
-
-  return <span className={`font-bold ${color}`}>{score}/100</span>
 }
 
 function PortCard({ port }: { port: Vulnerability }) {

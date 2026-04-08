@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
 import { 
-  Plus, Upload, Search, FileCode, FileText, Settings, Filter,
-  Trash2, Eye, EyeOff, Edit, ChevronDown, ChevronUp, X, Check,
-  Code, List, File, Tag, Zap
+  Upload, Search, FileCode, Settings,
+  Trash2, Eye, EyeOff, X, Check,
+  Code, List, Zap, File as FileIcon, ChevronDown
 } from 'lucide-react'
 import { getTools, uploadTool, deleteTool, updateTool, getToolContent, SecurityTool } from '../lib/api'
 
@@ -22,14 +21,6 @@ const toolTypeLabels: Record<string, string> = {
   wordlist: '字典',
   config: '配置文件',
   skill: 'AI Skill',
-}
-
-const categoryColors: Record<string, string> = {
-  reconnaissance: 'bg-blue-600',
-  vulnerability: 'bg-orange-600',
-  exploitation: 'bg-red-600',
-  post_exploitation: 'bg-purple-600',
-  utility: 'bg-gray-600',
 }
 
 export default function Knowledgebase() {
@@ -138,7 +129,7 @@ export default function Knowledgebase() {
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">加载中...</div>
       ) : filteredTools.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          <File className="w-12 h-12 mx-auto mb-2 opacity-50" />
+          <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p>暂无工具</p>
           <p className="text-sm">点击"上传工具"添加您的安全工具</p>
         </div>
@@ -317,7 +308,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
             <div className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
               {file ? (
                 <div className="flex items-center justify-center gap-2">
-                  <File className="w-5 h-5 text-blue-500" />
+                  <FileIcon className="w-5 h-5 text-blue-500" />
                   <span>{file.name}</span>
                   <span className="text-gray-500">({formatFileSize(file.size)})</span>
                 </div>

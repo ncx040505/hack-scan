@@ -104,6 +104,8 @@ services:
       - kali_tools:/scanner/tools
       - kali_output:/scanner/output
       - kali_logs:/scanner/logs
+      - kali_tmp:/scanner/tmp        # 扫描缓存目录
+      - tools_data:/app/data/tools   # 共享用户上传的工具
     networks:
       - scanner_network
     privileged: true  # 某些扫描工具需要特权模式（如 masscan）
@@ -146,3 +148,4 @@ volumes:
   kali_tools:
   kali_output:
   kali_logs:
+  kali_tmp:              # 扫描缓存 volume

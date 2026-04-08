@@ -2,48 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-ARG NUCLEI_VERSION=3.7.1
-
-# Install system dependencies including scanning tools
+# Install minimal system dependencies (no scanning tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # 基础工具
-    nmap \
+    # 基础工具（仅保留必要的）
     curl \
-    unzip \
-    p7zip-full \
     wget \
-    # 安全扫描工具
-    dirb \
-    sqlmap \
-    sslscan \
-    masscan \
-    hydra \
-    # 网络工具
+    # 网络诊断工具（backend可能需要）
     netcat-openbsd \
-    socat \
     dnsutils \
-    whois \
-    traceroute \
-    tcpdump \
     && rm -rf /var/lib/apt/lists/* \
     # 创建数据目录
     && mkdir -p /app/data
 
-# Install Nuclei
-RUN set -eux; \
-    arch="$(dpkg --print-architecture)"; \
-    case "$arch" in \
-        amd64) nuclei_arch="amd64" ;; \
-        arm64) nuclei_arch="arm64" ;; \
-        *) echo "Unsupported architecture: $arch"; exit 1 ;; \
-    esac; \
-    curl -fL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${nuclei_arch}.zip"; \
-    unzip -q /tmp/nuclei.zip -d /tmp/nuclei; \
-    install -m 0755 /tmp/nuclei/nuclei /usr/local/bin/nuclei; \
-    rm -rf /tmp/nuclei /tmp/nuclei.zip
-
-# Mark tools as pre-installed
-RUN mkdir -p /app/data && touch /app/data/.tools_initialized
+# 注意：所有扫描工具已移至 Kali 容器
+# Backend 只负责业务逻辑，不执行扫描
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

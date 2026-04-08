@@ -18,7 +18,7 @@ import {
   Trash2,
   AlertTriangle,
 } from 'lucide-react'
-import { getScans, ScanTask, deleteScan, batchDeleteScans } from '../lib/api'
+import { getScans, ScanTask, batchDeleteScans } from '../lib/api'
 
 // Status display configuration
 const statusIcons: Record<string, React.ComponentType<{ className?: string }>> = {
