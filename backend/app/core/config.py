@@ -16,14 +16,7 @@ class Settings(BaseSettings):
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_db: str = "vulnscanner_raw"
     redis_url: str = "redis://localhost:6379/0"
-    
-    # LLM Configuration (已弃用 - 请使用 Web 界面管理)
-    # 以下配置仅作为后备默认值，建议通过数据库配置管理
-    openai_api_key: str = ""
-    openai_base_url: str | None = None
-    llm_model: str = "gpt-4o"
-    llm_temperature: float = 0.1
-    
+
     # Kali Scanner
     kali_scanner_url: str = "http://kali_scanner:8888"
     

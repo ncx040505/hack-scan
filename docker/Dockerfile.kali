@@ -21,6 +21,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     nuclei \
     nikto \
     dirb \
+    hydra \
     gobuster \
     sqlmap \
     sslscan \
@@ -43,7 +44,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 RUN mkdir -p /scanner/tools /scanner/output /scanner/logs /scanner/tmp /app/data/tools
 
 # 预下载 nuclei templates（持久化规则库）
-# 使用 -ut 参数确保下载所有模板
 RUN nuclei -update-templates -ut || nuclei -update-templates || true
 
 # 验证模板已下载

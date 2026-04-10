@@ -3,13 +3,13 @@ set -e
 
 echo "🚀 Kali Scanner Container Starting..."
 
-# 更新 Nuclei 模板（后台执行，不阻塞启动）
+# 更新 Nuclei 模板
 echo "📦 Updating Nuclei templates from GitHub..."
 (
     nuclei -update-templates -silent 2>/dev/null || echo "⚠️  Nuclei templates update failed (using cached version)"
 ) &
 
-# 初始化 Metasploit 数据库（如果需要）
+# 初始化 Metasploit 数据库
 if [ ! -f /root/.msf4/database.yml ]; then
     echo "🗄️  Initializing Metasploit database..."
     service postgresql start 2>/dev/null || true
