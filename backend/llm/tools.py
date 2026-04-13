@@ -487,6 +487,33 @@ class HydraTool(SecurityTool):
             args: 完整命令行参数
             timeout: 超时时间(秒)
         """
+        # Security policy: Prohibit SSH brute force attacks
+        # Check for SSH brute force attempt through args parameter
+        if args:
+            args_lower = args.lower()
+            if " ssh" in args_lower or args_lower.startswith("ssh") or "-s 22" in args_lower:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="❌ 安全策略禁止对 SSH (22端口) 进行密码爆破攻击。"
+                )
+        
+        # Check for SSH brute force attempt through service parameter
+        if service and service.lower() == "ssh":
+            return ToolResult(
+                success=False,
+                output="",
+                error="❌ 安全策略禁止对 SSH (22端口) 进行密码爆破攻击。"
+            )
+        
+        # Check for SSH brute force attempt through port parameter
+        if port == 22:
+            return ToolResult(
+                success=False,
+                output="",
+                error="❌ 安全策略禁止对 SSH (22端口) 进行密码爆破攻击。"
+            )
+        
         if args:
             if target and service:
                 return await _run_shell_in_kali(f"hydra {args} {target} {service}", timeout)
