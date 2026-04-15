@@ -60,10 +60,9 @@ const statusFilterOptions = [
 type SortField = 'created_at' | 'vulnerability_count' | 'llm_risk_score'
 type SortOrder = 'asc' | 'desc'
 
-const PAGE_SIZE = 20
-
 export default function ScanList() {
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState('')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -71,11 +70,11 @@ export default function ScanList() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const queryClient = useQueryClient()
-  const skip = (page - 1) * PAGE_SIZE
+  const skip = (page - 1) * pageSize
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['scans', { skip, limit: PAGE_SIZE, status: statusFilter }],
-    queryFn: () => getScans({ skip, limit: PAGE_SIZE, status: statusFilter || undefined }),
+    queryKey: ['scans', { skip, limit: pageSize, status: statusFilter }],
+    queryFn: () => getScans({ skip, limit: pageSize, status: statusFilter || undefined }),
     refetchInterval: 5000,
   })
 
@@ -119,7 +118,7 @@ export default function ScanList() {
     })
   }, [data?.items, sortField, sortOrder])
 
-  const totalPages = Math.ceil((data?.total || 0) / PAGE_SIZE)
+  const totalPages = Math.ceil((data?.total || 0) / pageSize)
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -188,7 +187,7 @@ export default function ScanList() {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <h1 className="text-2xl font-bold">扫描任务</h1>
+        <h1 className="text-2xl font-bold">扫描历史</h1>
         <div className="flex items-center gap-3">
           {/* Batch Delete Button */}
           {selectedScans.size > 0 && (
@@ -217,15 +216,6 @@ export default function ScanList() {
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
-
-          {/* New Scan Button */}
-          <Link
-            to="/new-scan"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            新建扫描
-          </Link>
         </div>
       </div>
 
@@ -320,28 +310,49 @@ export default function ScanList() {
 
         {/* Pagination */}
         {!isLoading && (data?.total || 0) > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-4 flex-wrap">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               共 {data?.total || 0} 条记录，第 {page} / {totalPages || 1} 页
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-3 py-1.5 text-sm">
-                {page} / {totalPages || 1}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-4">
+              {/* Page Size Selector */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 dark:text-gray-400">每页显示:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setPage(1)
+                  }}
+                  className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={10}>10 条</option>
+                  <option value={20}>20 条</option>
+                  <option value={50}>50 条</option>
+                  <option value={100}>100 条</option>
+                </select>
+              </div>
+              
+              {/* Navigation Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-3 py-1.5 text-sm">
+                  {page} / {totalPages || 1}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}

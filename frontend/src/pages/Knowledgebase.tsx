@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
+import {
   Upload, Search, FileCode, Settings,
   Trash2, Eye, EyeOff, X, Check,
-  Code, List, Zap, File as FileIcon, ChevronDown
+  Code, List, Zap, File as FileIcon, ChevronDown, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { getTools, uploadTool, deleteTool, updateTool, getToolContent, SecurityTool } from '../lib/api'
 
@@ -27,6 +27,8 @@ const toolTypeLabels: Record<string, string> = {
 
 export default function Knowledgebase() {
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
   const [showUpload, setShowUpload] = useState(false)
   const [filterType, setFilterType] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -34,9 +36,10 @@ export default function Knowledgebase() {
   const [showContent, setShowContent] = useState(false)
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['tools', filterType],
-    queryFn: () => getTools({ 
-      limit: 100,
+    queryKey: ['tools', filterType, page, pageSize],
+    queryFn: () => getTools({
+      skip: (page - 1) * pageSize,
+      limit: pageSize,
       tool_type: filterType || undefined,
       enabled_only: false
     }),
@@ -56,7 +59,7 @@ export default function Knowledgebase() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => 
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       updateTool(id, { is_enabled: enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tools'] })
@@ -64,11 +67,20 @@ export default function Knowledgebase() {
   })
 
   const tools = data?.items || []
-  const filteredTools = tools.filter(t => 
-    searchQuery === '' || 
+  const totalItems = data?.total || 0
+  const totalPages = Math.ceil(totalItems / pageSize)
+  
+  // 客户端搜索过滤（在当前页内）
+  const filteredTools = tools.filter(t =>
+    searchQuery === '' ||
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setPage(1)
+  }
 
   return (
     <div>
@@ -87,6 +99,16 @@ export default function Knowledgebase() {
         </button>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-6 gap-4 mb-6">
+        <StatCard label="总工具数" value={totalItems} />
+        <StatCard label="脚本" value={tools.filter(t => t.tool_type === 'script').length} />
+        <StatCard label="Nuclei 模板" value={tools.filter(t => t.tool_type === 'nuclei').length} />
+        <StatCard label="字典" value={tools.filter(t => t.tool_type === 'wordlist').length} />
+        <StatCard label="配置" value={tools.filter(t => t.tool_type === 'config').length} />
+        <StatCard label="扫描器" value={tools.filter(t => t.tool_type === 'scanner').length} />
+      </div>
+
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow">
         <div className="flex gap-4 items-center">
@@ -100,10 +122,10 @@ export default function Knowledgebase() {
               className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          
+
           <div className="flex gap-2">
             <button
-              onClick={() => setFilterType('')}
+              onClick={() => { setFilterType(''); setPage(1); }}
               className={`px-3 py-2 rounded-lg text-sm ${filterType === '' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
             >
               全部
@@ -111,7 +133,7 @@ export default function Knowledgebase() {
             {Object.entries(toolTypeLabels).map(([type, label]) => (
               <button
                 key={type}
-                onClick={() => setFilterType(type)}
+                onClick={() => { setFilterType(type); setPage(1); }}
                 className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 ${filterType === type ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               >
                 {toolTypeIcons[type]}
@@ -120,16 +142,6 @@ export default function Knowledgebase() {
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-6 gap-4 mb-6">
-        <StatCard label="总工具数" value={tools.length} />
-        <StatCard label="脚本" value={tools.filter(t => t.tool_type === 'script').length} />
-        <StatCard label="Nuclei 模板" value={tools.filter(t => t.tool_type === 'nuclei').length} />
-        <StatCard label="字典" value={tools.filter(t => t.tool_type === 'wordlist').length} />
-        <StatCard label="配置" value={tools.filter(t => t.tool_type === 'config').length} />
-        <StatCard label="扫描器" value={tools.filter(t => t.tool_type === 'scanner').length} />
       </div>
 
       {/* Tools Grid */}
@@ -146,17 +158,65 @@ export default function Knowledgebase() {
           <p className="text-sm">点击"上传工具"添加您的安全工具</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTools.map(tool => (
-            <ToolCard 
-              key={tool.id} 
-              tool={tool} 
-              onView={() => { setSelectedTool(tool); setShowContent(true); }}
-              onToggle={(enabled) => toggleMutation.mutate({ id: tool.id, enabled })}
-              onDelete={() => deleteMutation.mutate(tool.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {filteredTools.map(tool => (
+              <ToolCard
+                key={tool.id}
+                tool={tool}
+                onView={() => { setSelectedTool(tool); setShowContent(true); }}
+                onToggle={(enabled) => toggleMutation.mutate({ id: tool.id, enabled })}
+                onDelete={() => deleteMutation.mutate(tool.id)}
+              />
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                共 {totalItems} 个工具，第 {page} / {totalPages || 1} 页
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Page Size Selector */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 dark:text-gray-400">每页显示:</label>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={6}>6 个</option>
+                    <option value={12}>12 个</option>
+                    <option value={24}>24 个</option>
+                    <option value={48}>48 个</option>
+                  </select>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 py-1.5 text-sm">
+                    {page} / {totalPages || 1}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Upload Modal */}
@@ -181,12 +241,12 @@ function StatCard({ label, value }: { label: string; value: number }) {
   )
 }
 
-function ToolCard({ 
-  tool, 
-  onView, 
-  onToggle, 
-  onDelete 
-}: { 
+function ToolCard({
+  tool,
+  onView,
+  onToggle,
+  onDelete
+}: {
   tool: SecurityTool
   onView: () => void
   onToggle: (enabled: boolean) => void
@@ -204,7 +264,7 @@ function ToolCard({
           </span>
         </div>
         <div className="relative">
-          <button 
+          <button
             onClick={() => setShowActions(!showActions)}
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           >
@@ -212,20 +272,20 @@ function ToolCard({
           </button>
           {showActions && (
             <div className="absolute right-0 top-8 bg-white dark:bg-gray-700 rounded-lg shadow-lg py-1 z-10 min-w-32 border border-gray-200 dark:border-gray-600">
-              <button 
+              <button
                 onClick={() => { onView(); setShowActions(false); }}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2"
               >
                 <Eye className="w-4 h-4" /> 查看内容
               </button>
-              <button 
+              <button
                 onClick={() => { onToggle(!tool.is_enabled); setShowActions(false); }}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2"
               >
                 {tool.is_enabled ? <EyeOff className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                 {tool.is_enabled ? '禁用' : '启用'}
               </button>
-              <button 
+              <button
                 onClick={() => { onDelete(); setShowActions(false); }}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2 text-red-500"
               >
@@ -235,18 +295,18 @@ function ToolCard({
           )}
         </div>
       </div>
-      
+
       <h3 className="font-semibold mb-1">{tool.name}</h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
         {tool.description || '暂无描述'}
       </p>
-      
+
       <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
         <span>{tool.filename}</span>
         <span>•</span>
         <span>{formatFileSize(tool.file_size)}</span>
       </div>
-      
+
       {tool.tags && tool.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {tool.tags.slice(0, 3).map(tag => (
@@ -312,7 +372,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <form onSubmit={(e) => { e.preventDefault(); uploadMutation.mutate(); }} className="p-4 space-y-4">
           {/* File Upload */}
           <div>
@@ -338,7 +398,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           </div>
-          
+
           {/* Tool Type */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">工具类型 *</label>
@@ -365,7 +425,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
-          
+
           {/* Name */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">名称 *</label>
@@ -378,7 +438,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               required
             />
           </div>
-          
+
           {/* Description */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">描述</label>
@@ -389,7 +449,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               placeholder="工具描述..."
             />
           </div>
-          
+
           {/* Category */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">分类</label>
@@ -406,7 +466,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               <option value="utility">实用工具 (Utility)</option>
             </select>
           </div>
-          
+
           {/* Tags */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">标签 (逗号分隔)</label>
@@ -418,7 +478,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               placeholder="web, sql, xss"
             />
           </div>
-          
+
           {/* Usage Instructions */}
           <div>
             <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">使用说明</label>
@@ -429,7 +489,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               placeholder="如何使用这个工具..."
             />
           </div>
-          
+
           {/* Author & Version */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -452,18 +512,18 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           </div>
-          
+
           {/* Error */}
           {uploadMutation.isError && (
             <div className="text-red-500 text-sm">
               上传失败: {
                 // @ts-expect-error axios error response
-                uploadMutation.error?.response?.data?.detail || 
+                uploadMutation.error?.response?.data?.detail ||
                 (uploadMutation.error as Error).message
               }
             </div>
           )}
-          
+
           {/* Submit */}
           <div className="flex justify-end gap-2 pt-4">
             <button
@@ -495,7 +555,7 @@ function ContentModal({ tool, onClose }: { tool: SecurityTool; onClose: () => vo
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-lg font-semibold">{tool.name}</h2>
@@ -505,29 +565,34 @@ function ContentModal({ tool, onClose }: { tool: SecurityTool; onClose: () => vo
             <X className="w-5 h-5" />
           </button>
         </div>
-        
-        <div className="flex-1 overflow-auto p-4">
-          {isLoading ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">加载中...</div>
-          ) : error ? (
-            <div className="text-center py-8 text-red-500">
-              无法加载文件内容
+
+        <div className="flex-1 overflow-hidden flex gap-4 p-4">
+          {/* File Content - Left side */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">文件内容</div>
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">加载中...</div>
+            ) : error ? (
+              <div className="text-center py-8 text-red-500">
+                无法加载文件内容
+              </div>
+            ) : (
+              <pre className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                {data?.content}
+              </pre>
+            )}
+          </div>
+
+          {/* Usage Instructions - Right side */}
+          {tool.usage_instructions && (
+            <div className="flex-1 overflow-y-auto border-l border-gray-200 dark:border-gray-700 pl-4">
+              <div className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">使用说明</div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                {tool.usage_instructions}
+              </p>
             </div>
-          ) : (
-            <pre className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-              {data?.content}
-            </pre>
           )}
         </div>
-        
-        {tool.usage_instructions && (
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="font-semibold mb-2">使用说明</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
-              {tool.usage_instructions}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -6,11 +6,9 @@ import { useTheme } from '../contexts/ThemeContext'
 
 const navItems = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard },
-  { to: '/scans', label: '扫描任务', icon: List },
-  { to: '/new-scan', label: '新建扫描', icon: Plus },
+  { to: '/scans', label: '扫描历史', icon: List },
   { to: '/knowledgebase', label: '知识库', icon: Database },
   { to: '/personas', label: 'AI 人格', icon: Bot },
-  { to: '/settings', label: '系统设置', icon: Settings },
 ]
 
 export default function Layout() {
@@ -46,22 +44,72 @@ export default function Layout() {
             aria-label="关闭菜单遮罩"
           />
           <aside className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-            <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <Shield className="w-7 h-7 text-blue-500" />
-                <span className="text-xl font-bold">Shelling</span>
+            <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Shield className="w-7 h-7 text-blue-500 flex-shrink-0" />
+                <span className="text-xl font-bold truncate">Shelling</span>
+              </div>
+              {/* Theme Switcher - Mobile */}
+              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 flex-shrink-0">
+                <button
+                  onClick={() => setTheme('light')}
+                  className={clsx(
+                    'p-1.5 rounded text-sm transition-colors',
+                    theme === 'light'
+                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  )}
+                  title="明亮模式"
+                >
+                  <Sun className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => setTheme('dark')}
+                  className={clsx(
+                    'p-1.5 rounded text-sm transition-colors',
+                    theme === 'dark'
+                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  )}
+                  title="暗色模式"
+                >
+                  <Moon className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => setTheme('system')}
+                  className={clsx(
+                    'p-1.5 rounded text-sm transition-colors',
+                    theme === 'system'
+                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  )}
+                  title="跟随系统"
+                >
+                  <Monitor className="w-3 h-3" />
+                </button>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0"
                 aria-label="关闭菜单"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <nav className="p-4 space-y-2">
+        <div className="px-4 py-2">
+          <Link
+            to="/new-scan"
+            onClick={() => setMobileMenuOpen(false)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            新建扫描
+          </Link>
+        </div>
+
+        <nav className="px-4 py-2 space-y-2 flex-1">
               {navItems.map(item => (
                 <Link
                   key={`mobile-${item.to}`}
@@ -70,7 +118,7 @@ export default function Layout() {
                   className={clsx(
                     'flex items-center gap-3 px-4 py-2 rounded-lg transition-colors',
                     location.pathname === item.to
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
                       : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                   )}
                 >
@@ -80,46 +128,20 @@ export default function Layout() {
               ))}
             </nav>
 
-            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">主题设置</p>
-              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setTheme('light')}
-                  className={clsx(
-                    'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                    theme === 'light'
-                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  )}
-                  title="明亮模式"
-                >
-                  <Sun className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setTheme('dark')}
-                  className={clsx(
-                    'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                    theme === 'dark'
-                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  )}
-                  title="暗色模式"
-                >
-                  <Moon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setTheme('system')}
-                  className={clsx(
-                    'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                    theme === 'system'
-                      ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  )}
-                  title="跟随系统"
-                >
-                  <Monitor className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto">
+              <Link
+                to="/settings"
+                onClick={() => setMobileMenuOpen(false)}
+                className={clsx(
+                  'flex items-center gap-3 px-4 py-2 rounded-lg transition-colors',
+                  location.pathname === '/settings'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                )}
+              >
+                <Settings className="w-5 h-5" />
+                系统设置
+              </Link>
             </div>
           </aside>
         </div>
@@ -128,12 +150,63 @@ export default function Layout() {
       <div className="flex min-h-[calc(100vh-3.5rem)] md:min-h-screen">
         {/* Sidebar */}
         <aside className="hidden md:flex md:w-64 md:flex-col md:bg-white md:dark:bg-gray-800 md:border-r md:border-gray-200 md:dark:border-gray-700 md:sticky md:top-0 md:h-screen">
-        <div className="p-4 flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
-          <Shield className="w-8 h-8 text-blue-500" />
-          <span className="text-xl font-bold">Shelling</span>
+        <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Shield className="w-8 h-8 text-blue-500 flex-shrink-0" />
+            <span className="text-xl font-bold truncate">Shelling</span>
+          </div>
+          {/* Theme Switcher - Desktop */}
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 flex-shrink-0">
+            <button
+              onClick={() => setTheme('light')}
+              className={clsx(
+                'p-1.5 rounded text-sm transition-colors',
+                theme === 'light'
+                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              )}
+              title="明亮模式"
+            >
+              <Sun className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setTheme('dark')}
+              className={clsx(
+                'p-1.5 rounded text-sm transition-colors',
+                theme === 'dark'
+                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              )}
+              title="暗色模式"
+            >
+              <Moon className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setTheme('system')}
+              className={clsx(
+                'p-1.5 rounded text-sm transition-colors',
+                theme === 'system'
+                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              )}
+              title="跟随系统"
+            >
+              <Monitor className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
-        <nav className="p-4 space-y-2">
+        <div className="px-4 py-2">
+          <Link
+            to="/new-scan"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            新建扫描
+          </Link>
+        </div>
+
+        <nav className="px-4 py-2 space-y-2 flex-1">
           {navItems.map(item => (
             <Link
               key={item.to}
@@ -141,7 +214,7 @@ export default function Layout() {
               className={clsx(
                 'flex items-center gap-3 px-4 py-2 rounded-lg transition-colors',
                 location.pathname === item.to
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               )}
             >
@@ -151,47 +224,19 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Theme Switcher */}
-        <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">主题设置</p>
-          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button
-              onClick={() => setTheme('light')}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                theme === 'light'
-                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              )}
-              title="明亮模式"
-            >
-              <Sun className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setTheme('dark')}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                theme === 'dark'
-                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              )}
-              title="暗色模式"
-            >
-              <Moon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setTheme('system')}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-sm transition-colors',
-                theme === 'system'
-                  ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              )}
-              title="跟随系统"
-            >
-              <Monitor className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <Link
+            to="/settings"
+            className={clsx(
+              'flex items-center gap-3 px-4 py-2 rounded-lg transition-colors',
+              location.pathname === '/settings'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            )}
+          >
+            <Settings className="w-5 h-5" />
+            系统设置
+          </Link>
         </div>
         </aside>
 

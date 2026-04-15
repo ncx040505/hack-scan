@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Play, AlertTriangle, Settings, ChevronDown, ChevronUp, Bot, Info } from 'lucide-react'
+import { Play, AlertTriangle, Settings, ChevronDown, ChevronUp, Bot, Info, X } from 'lucide-react'
 import { createScan, ScanConfig, getPersonasBrief } from '../lib/api'
 
 const scanTypeLabels: Record<string, { name: string; desc: string }> = {
   full: { name: '完整扫描', desc: '包含所有端口的全面扫描' },
-  custom: { name: '自定义', desc: '手动配置扫描选项' },
   quick: { name: '仅扫描端口', desc: '仅扫描常用端口，不进行漏洞检测' },
+  custom: { name: '自定义', desc: '手动配置扫描选项' },
 }
 
 // 判断目标是否为 URL（带协议）
@@ -46,11 +46,51 @@ export default function NewScan() {
     ai_persona_id: null,  // null 表示使用默认人格
   })
 
+  // 目标历史记录管理
+  const [targetHistory, setTargetHistory] = useState<string[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+
+  // 从 localStorage 加载历史记录
+  useEffect(() => {
+    const saved = localStorage.getItem('scanTargetHistory')
+    if (saved) {
+      try {
+        setTargetHistory(JSON.parse(saved))
+      } catch (e) {
+        console.error('Failed to load target history:', e)
+      }
+    }
+  }, [])
+
+  // 保存历史记录到 localStorage
+  const saveTargetHistory = (history: string[]) => {
+    setTargetHistory(history)
+    localStorage.setItem('scanTargetHistory', JSON.stringify(history))
+  }
+
+  // 过滤匹配的历史记录
+  const filteredHistory = targetHistory.filter(h =>
+    h.toLowerCase().includes(target.toLowerCase()) && h !== target
+  )
+
+  // 从历史记录中删除项目
+  const removeFromHistory = (item: string) => {
+    const updated = targetHistory.filter(h => h !== item)
+    saveTargetHistory(updated)
+  }
+
+  // 添加到历史记录
+  const addToHistory = (value: string) => {
+    if (!value.trim()) return
+    const updated = [value, ...targetHistory.filter(h => h !== value)].slice(0, 20) // 保留最多20条
+    saveTargetHistory(updated)
+  }
+
   // 监听目标变化，自动检测是否为 URL
   useEffect(() => {
     const urlDetected = isUrl(target)
     setIsUrlTarget(urlDetected)
-    
+
     if (urlDetected) {
       const port = getUrlPort(target)
       setDetectedPort(port)
@@ -79,7 +119,13 @@ export default function NewScan() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!target.trim()) return
+    addToHistory(target)
     mutation.mutate()
+  }
+
+  const handleSelectHistory = (value: string) => {
+    setTarget(value)
+    setShowHistory(false)
   }
 
   return (
@@ -101,14 +147,50 @@ export default function NewScan() {
         {/* Target */}
         <div>
           <label className="block text-sm font-medium mb-2">目标 URL 或 IP</label>
-          <input
-            type="text"
-            value={target}
-            onChange={e => setTarget(e.target.value)}
-            placeholder="https://example.com 或 192.168.1.1"
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+          <div className="relative" onBlur={() => setTimeout(() => setShowHistory(false), 100)}>
+            <input
+              type="text"
+              value={target}
+              onChange={e => setTarget(e.target.value)}
+              onFocus={() => setShowHistory(true)}
+              placeholder="https://example.com 或 192.168.1.1"
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            {/* History Dropdown */}
+            {showHistory && (targetHistory.length > 0 || target) && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+                {filteredHistory.length > 0 ? (
+                  filteredHistory.map((item, index) => (
+                    <div
+                      key={index}
+                      className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between group"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSelectHistory(item)}
+                        className="flex-1 text-left text-gray-700 dark:text-gray-300"
+                      >
+                        {item}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFromHistory(item)}
+                        className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                        title="删除历史记录"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                ) : targetHistory.length > 0 ? (
+                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-sm">
+                    未找到匹配的历史记录
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
           {/* URL 检测提示 */}
           {isUrlTarget && (
             <div className="mt-2 flex items-start gap-2 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 p-2 rounded">
@@ -130,11 +212,10 @@ export default function NewScan() {
                 key={type}
                 type="button"
                 onClick={() => setScanType(type)}
-                className={`px-4 py-3 rounded-lg border transition-colors ${
-                  scanType === type
+                className={`px-4 py-3 rounded-lg border transition-colors ${scanType === type
                     ? 'bg-blue-600 border-blue-500 text-white'
                     : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
-                }`}
+                  }`}
               >
                 {name}
               </button>
@@ -162,7 +243,7 @@ export default function NewScan() {
                 )}
               </span>
             </label>
-            
+
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -204,7 +285,7 @@ export default function NewScan() {
               <ChevronDown className="w-5 h-5 text-gray-500" />
             )}
           </button>
-          
+
           {showAdvanced && (
             <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
               {/* AI Persona Selection */}

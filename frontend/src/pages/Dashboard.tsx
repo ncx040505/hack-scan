@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { format, parseISO, startOfDay } from 'date-fns'
@@ -7,6 +7,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Sector,
   LineChart,
   Line,
   XAxis,
@@ -157,6 +158,84 @@ export default function Dashboard() {
     return { statusData, severityData, trendData, scanTypeData }
   }, [data])
 
+  const scans = data?.items || []
+  const layoutRef = useRef<HTMLDivElement | null>(null)
+  const leftColumnRef = useRef<HTMLDivElement | null>(null)
+  const [showRightAside, setShowRightAside] = useState(false)
+  const [syncedRightHeight, setSyncedRightHeight] = useState<number | null>(null)
+  const [animateOnLoad, setAnimateOnLoad] = useState(false)
+  const [activeStatusIndex, setActiveStatusIndex] = useState<number>(-1)
+  const [activeScanTypeIndex, setActiveScanTypeIndex] = useState<number>(-1)
+  const [activeSeverityIndex, setActiveSeverityIndex] = useState<number>(-1)
+
+  useEffect(() => {
+    setAnimateOnLoad(false)
+    const frame = window.requestAnimationFrame(() => {
+      setAnimateOnLoad(true)
+    })
+    const timer = window.setTimeout(() => setAnimateOnLoad(false), 1400)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [showRightAside])
+
+  useEffect(() => {
+    const container = layoutRef.current
+    if (!container) {
+      return
+    }
+
+    const minLeftWidth = 560
+    const minRightWidth = 560
+    const columnGap = 24
+
+    const updateLayoutMode = () => {
+      const canShowTwoColumns = container.clientWidth >= (minLeftWidth + minRightWidth + columnGap)
+      setShowRightAside(canShowTwoColumns)
+    }
+
+    updateLayoutMode()
+
+    const observer = new ResizeObserver(updateLayoutMode)
+    observer.observe(container)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [isLoading, error])
+
+  useEffect(() => {
+    const leftColumn = leftColumnRef.current
+    if (!leftColumn || !showRightAside) {
+      setSyncedRightHeight(null)
+      return
+    }
+
+    const syncHeight = () => {
+      const contentHeight = Math.max(leftColumn.scrollHeight, Math.round(leftColumn.getBoundingClientRect().height))
+      setSyncedRightHeight(contentHeight)
+    }
+
+    syncHeight()
+
+    const observer = new ResizeObserver(syncHeight)
+    observer.observe(leftColumn)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [showRightAside, statusData.length, scanTypeData.length, severityData.length, trendData.length, scans.length])
+
+  const recentScans = scans.slice(0, 15)
+
+  const maxLegendItems = Math.max(statusData.length, scanTypeData.length, severityData.length)
+  const estimatedLegendRows = Math.max(1, Math.ceil(maxLegendItems / 2))
+  const distributionLegendHeight = estimatedLegendRows * 22 + 8
+  const distributionChartHeight = 140 + distributionLegendHeight
+  const totalVulnerabilities = scans.reduce((sum, s) => sum + s.vulnerability_count, 0)
+
   if (isLoading) {
     return <div className="text-center py-12">加载中...</div>
   }
@@ -169,235 +248,272 @@ export default function Dashboard() {
     )
   }
 
-  const scans = data?.items || []
-  const recentScans = scans.slice(0, 10)
-  const totalVulnerabilities = scans.reduce((sum, s) => sum + s.vulnerability_count, 0)
-
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">仪表盘</h1>
-        <Link
-          to="/new-scan"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-        >
-          新建扫描
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold mb-6">仪表盘</h1>
 
-      {/* Stats + Task Status Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Stats Cards */}
-        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            label="总扫描数"
-            value={data?.total || 0}
-            icon={Activity}
-          />
-          <StatCard
-            label="进行中"
-            value={scans.filter(s => s.status === 'RUNNING').length}
-            icon={Clock}
-            color="text-blue-500"
-          />
-          <StatCard
-            label="已完成"
-            value={scans.filter(s => s.status === 'COMPLETED').length}
-            icon={CheckCircle}
-            color="text-green-500"
-          />
-          <StatCard
-            label="漏洞数"
-            value={totalVulnerabilities}
-            icon={AlertTriangle}
-            color="text-orange-500"
-          />
-        </div>
+      <div
+        ref={layoutRef}
+        className={`grid grid-cols-1 gap-6 ${showRightAside ? 'grid-cols-[minmax(0,5fr)_minmax(0,5fr)] items-start' : ''}`}
+      >
+        <div className="self-start">
+          <div ref={leftColumnRef} className="space-y-4">
+            {/* Left row 1: Summary stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                label="总扫描数"
+                value={data?.total || 0}
+                icon={Activity}
+              />
+              <StatCard
+                label="进行中"
+                value={scans.filter(s => s.status === 'RUNNING').length}
+                icon={Clock}
+                color="text-blue-500"
+              />
+              <StatCard
+                label="已完成"
+                value={scans.filter(s => s.status === 'COMPLETED').length}
+                icon={CheckCircle}
+                color="text-green-500"
+              />
+              <StatCard
+                label="漏洞数"
+                value={totalVulnerabilities}
+                icon={AlertTriangle}
+                color="text-orange-500"
+              />
+            </div>
 
-        {/* Task Status Pie Chart */}
-        <ChartCard title="任务状态分布" icon={PieChartIcon}>
-          {statusData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={70}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={pieTooltipContentStyle}
-                  labelStyle={pieTooltipTextStyle}
-                  itemStyle={pieTooltipTextStyle}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChartState message="暂无任务数据" />
-          )}
-        </ChartCard>
-      </div>
+            {/* Left row 2: Distribution charts */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <ChartCard title="任务状态分布" icon={PieChartIcon} className="h-full p-3">
+                {statusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={distributionChartHeight}>
+                    <PieChart>
+                      <Pie
+                        data={statusData}
+                        cx="50%"
+                        cy="46%"
+                        innerRadius={30}
+                        outerRadius={50}
+                        paddingAngle={2}
+                        dataKey="value"
+                        isAnimationActive={animateOnLoad}
+                        animationDuration={900}
+                        animationEasing="ease-out"
+                        activeIndex={activeStatusIndex}
+                        activeShape={renderActivePieShape}
+                        onMouseEnter={(_, index) => setActiveStatusIndex(index)}
+                        onMouseLeave={() => setActiveStatusIndex(-1)}
+                      >
+                        {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={pieTooltipContentStyle}
+                        labelStyle={pieTooltipTextStyle}
+                        itemStyle={pieTooltipTextStyle}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={distributionLegendHeight}
+                        wrapperStyle={{ paddingTop: '2px', paddingBottom: '8px' }}
+                        formatter={(value) => <span className="text-gray-400 text-xs">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyChartState message="暂无任务数据" />
+                )}
+              </ChartCard>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Vulnerability Trend */}
-        <ChartCard title="漏洞趋势" icon={TrendingUp} className="lg:col-span-1">
-          {trendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis
-                  dataKey="date"
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(31, 41, 55, 0.9)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#fff',
-                  }}
-                  formatter={(value: number) => [value, '漏洞数']}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="vulnerabilities"
-                  stroke="#F97316"
-                  strokeWidth={2}
-                  dot={{ fill: '#F97316', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChartState message="暂无趋势数据" />
-          )}
-        </ChartCard>
+              <ChartCard title="扫描类型分布" icon={PieChartIcon} className="h-full p-3">
+                {scanTypeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={distributionChartHeight}>
+                    <PieChart>
+                      <Pie
+                        data={scanTypeData}
+                        cx="50%"
+                        cy="46%"
+                        innerRadius={30}
+                        outerRadius={50}
+                        paddingAngle={2}
+                        dataKey="value"
+                        isAnimationActive={animateOnLoad}
+                        animationDuration={900}
+                        animationEasing="ease-out"
+                        activeIndex={activeScanTypeIndex}
+                        activeShape={renderActivePieShape}
+                        onMouseEnter={(_, index) => setActiveScanTypeIndex(index)}
+                        onMouseLeave={() => setActiveScanTypeIndex(-1)}
+                      >
+                        {scanTypeData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={pieTooltipContentStyle}
+                        labelStyle={pieTooltipTextStyle}
+                        itemStyle={pieTooltipTextStyle}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={distributionLegendHeight}
+                        wrapperStyle={{ paddingTop: '2px', paddingBottom: '8px' }}
+                        formatter={(value) => <span className="text-gray-400 text-xs">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyChartState message="暂无扫描数据" />
+                )}
+              </ChartCard>
 
-        {/* Severity Distribution + Scan Type */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Severity Distribution */}
-          <ChartCard title="漏洞等级分布" icon={AlertTriangle}>
-            {severityData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie
-                    data={severityData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={35}
-                    outerRadius={60}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {severityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={pieTooltipContentStyle}
-                    labelStyle={pieTooltipTextStyle}
-                    itemStyle={pieTooltipTextStyle}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    formatter={(value) => <span className="text-gray-400 text-xs">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChartState message="暂无漏洞数据" />
-            )}
-          </ChartCard>
+              <ChartCard title="漏洞等级分布" icon={AlertTriangle} className="h-full p-3">
+                {severityData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={distributionChartHeight}>
+                    <PieChart>
+                      <Pie
+                        data={severityData}
+                        cx="50%"
+                        cy="46%"
+                        innerRadius={30}
+                        outerRadius={50}
+                        paddingAngle={2}
+                        dataKey="value"
+                        isAnimationActive={animateOnLoad}
+                        animationDuration={900}
+                        animationEasing="ease-out"
+                        activeIndex={activeSeverityIndex}
+                        activeShape={renderActivePieShape}
+                        onMouseEnter={(_, index) => setActiveSeverityIndex(index)}
+                        onMouseLeave={() => setActiveSeverityIndex(-1)}
+                      >
+                        {severityData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={pieTooltipContentStyle}
+                        labelStyle={pieTooltipTextStyle}
+                        itemStyle={pieTooltipTextStyle}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={distributionLegendHeight}
+                        wrapperStyle={{ paddingTop: '2px', paddingBottom: '8px' }}
+                        formatter={(value) => <span className="text-gray-400 text-xs">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyChartState message="暂无漏洞数据" />
+                )}
+              </ChartCard>
+            </div>
 
-          {/* Scan Type Distribution */}
-          <ChartCard title="扫描类型分布" icon={PieChartIcon}>
-            {scanTypeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie
-                    data={scanTypeData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={35}
-                    outerRadius={60}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {scanTypeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={pieTooltipContentStyle}
-                    labelStyle={pieTooltipTextStyle}
-                    itemStyle={pieTooltipTextStyle}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    formatter={(value) => <span className="text-gray-400 text-xs">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChartState message="暂无扫描数据" />
-            )}
-          </ChartCard>
-        </div>
-      </div>
-
-      {/* Recent Scan List */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow">
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h3 className="font-semibold text-gray-700 dark:text-gray-200">最近扫描任务</h3>
-          <Link to="/scans" className="text-sm text-blue-500 hover:text-blue-400">
-            查看全部 →
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-            <thead className="bg-gray-100 dark:bg-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">目标</th>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">类型</th>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">状态</th>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">漏洞</th>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">风险评分</th>
-                <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">创建时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentScans.map(scan => (
-                <ScanRow key={scan.id} scan={scan} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {scans.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            暂无扫描记录，点击"新建扫描"开始
+            {/* Left row 3: Vulnerability trend */}
+            <ChartCard title="漏洞趋势" icon={TrendingUp}>
+              {trendData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={trendData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#D1D5DB" />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#6B7280"
+                      fontSize={12}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      stroke="#6B7280"
+                      fontSize={12}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '8px',
+                        color: '#111827',
+                      }}
+                      formatter={(value: number) => [value, '漏洞数']}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="vulnerabilities"
+                      stroke="#F97316"
+                      strokeWidth={2}
+                      isAnimationActive={animateOnLoad}
+                      animationDuration={1100}
+                      animationEasing="ease-out"
+                      dot={{ fill: '#F97316', strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyChartState message="暂无趋势数据" />
+              )}
+            </ChartCard>
           </div>
-        )}
+        </div>
+
+        {/* Right column: Recent scans auto-fit left column height */}
+        <div
+          className={showRightAside ? 'h-full self-start' : ''}
+          style={showRightAside && syncedRightHeight ? {
+            height: `${syncedRightHeight}px`,
+            minHeight: `${syncedRightHeight}px`,
+            maxHeight: `${syncedRightHeight}px`,
+          } : undefined}
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow h-full flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-700 dark:text-gray-200">最近扫描任务</h3>
+              <Link to="/scans" className="text-sm text-blue-500 hover:text-blue-400">
+                查看全部 →
+              </Link>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col style={{ width: '30%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                </colgroup>
+                <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">目标</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">类型</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">状态</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">漏洞</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">风险评分</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">创建时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentScans.map(scan => (
+                    <ScanRow key={scan.id} scan={scan} />
+                  ))}
+                </tbody>
+              </table>
+
+              {scans.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  暂无扫描记录，点击"新建扫描"开始
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -464,31 +580,31 @@ function ScanRow({ scan }: { scan: ScanTask }) {
   const StatusIcon = statusIcons[scan.status] || Clock
 
   return (
-    <tr className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
-      <td className="px-4 py-3">
+    <tr className="h-14 border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
+      <td className="px-4 py-0 align-middle">
         <Link
           to={`/scans/${scan.id}`}
-          className="text-blue-600 dark:text-blue-400 hover:underline"
+          className="block truncate text-blue-600 dark:text-blue-400 hover:underline"
         >
           {scan.target}
         </Link>
       </td>
-      <td className="px-4 py-3 capitalize">{scan.scan_type}</td>
-      <td className="px-4 py-3">
-        <span className={`flex items-center gap-2 ${statusColors[scan.status] || 'text-gray-500'}`}>
+      <td className="px-4 py-0 align-middle capitalize whitespace-nowrap truncate">{scan.scan_type}</td>
+      <td className="px-4 py-0 align-middle">
+        <span className={`flex items-center gap-2 whitespace-nowrap ${statusColors[scan.status] || 'text-gray-500'}`}>
           <StatusIcon className="w-4 h-4" />
           {statusLabels[scan.status] || scan.status}
         </span>
       </td>
-      <td className="px-4 py-3">{scan.vulnerability_count}</td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-0 align-middle whitespace-nowrap">{scan.vulnerability_count}</td>
+      <td className="px-4 py-0 align-middle whitespace-nowrap">
         {scan.llm_risk_score !== null ? (
           <RiskScore score={scan.llm_risk_score} />
         ) : (
           '-'
         )}
       </td>
-      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+      <td className="px-4 py-0 align-middle text-gray-500 dark:text-gray-400 whitespace-nowrap">
         {format(new Date(scan.created_at), 'MM-dd HH:mm')}
       </td>
     </tr>
@@ -503,4 +619,15 @@ function RiskScore({ score }: { score: number }) {
           'text-green-500'
 
   return <span className={`font-semibold ${color}`}>{score}/100</span>
+}
+
+function renderActivePieShape(props: any) {
+  const { outerRadius } = props
+
+  return (
+    <Sector
+      {...props}
+      outerRadius={typeof outerRadius === 'number' ? outerRadius + 8 : 58}
+    />
+  )
 }
