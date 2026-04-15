@@ -65,7 +65,7 @@ export default function ScanDetail() {
   const { data: progress } = useQuery({
     queryKey: ['scan-progress', scanId],
     queryFn: () => getScanProgress(scanId!),
-    enabled: !!scanId && (scan?.status === 'RUNNING' || scan?.status === 'PENDING'),
+    enabled: !!scanId && (scan?.status === 'RUNNING' || scan?.status === 'PENDING' || scan?.status === 'PAUSED'),
     refetchInterval: 1500,
   })
 
