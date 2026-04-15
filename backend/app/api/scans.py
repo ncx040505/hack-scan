@@ -74,6 +74,7 @@ async def list_scans(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: ScanStatus | None = None,
+    search: str | None = None,
     db: AsyncSession = Depends(get_db)
 ):
     """获取扫描任务列表"""
@@ -81,6 +82,14 @@ async def list_scans(
     
     if status:
         query = query.where(ScanTask.status == status)
+    
+    # 支持模糊搜索：搜索目标和备注
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.where(
+            (ScanTask.target.ilike(search_pattern)) |
+            (ScanTask.remark.ilike(search_pattern))
+        )
     
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
@@ -90,6 +99,12 @@ async def list_scans(
     count_query = select(func.count(ScanTask.id))
     if status:
         count_query = count_query.where(ScanTask.status == status)
+    if search:
+        search_pattern = f"%{search}%"
+        count_query = count_query.where(
+            (ScanTask.target.ilike(search_pattern)) |
+            (ScanTask.remark.ilike(search_pattern))
+        )
     total = (await db.execute(count_query)).scalar()
     
     # 获取漏洞数量

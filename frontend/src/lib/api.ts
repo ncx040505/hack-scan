@@ -54,7 +54,7 @@ export interface Vulnerability {
 }
 
 // API functions
-export async function getScans(params?: { skip?: number; limit?: number; status?: string }) {
+export async function getScans(params?: { skip?: number; limit?: number; status?: string; search?: string }) {
   const { data } = await api.get<{ total: number; items: ScanTask[] }>('/scans', { params })
   return data
 }

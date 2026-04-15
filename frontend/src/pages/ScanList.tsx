@@ -64,6 +64,7 @@ export default function ScanList() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set())
@@ -73,8 +74,8 @@ export default function ScanList() {
   const skip = (page - 1) * pageSize
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['scans', { skip, limit: pageSize, status: statusFilter }],
-    queryFn: () => getScans({ skip, limit: pageSize, status: statusFilter || undefined }),
+    queryKey: ['scans', { skip, limit: pageSize, status: statusFilter, search: searchQuery }],
+    queryFn: () => getScans({ skip, limit: pageSize, status: statusFilter || undefined, search: searchQuery || undefined }),
     refetchInterval: 5000,
   })
 
@@ -201,20 +202,33 @@ export default function ScanList() {
             </button>
           )}
 
-          {/* Status Filter */}
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          {/* Search and Filter */}
+          <div className="flex gap-3 items-center flex-wrap">
+            <input
+              type="text"
+              placeholder="搜索目标、备注..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setPage(1)
+              }}
+              className="flex-1 min-w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {/* Status Filter */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {statusFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
           </div>
         </div>
       </div>
