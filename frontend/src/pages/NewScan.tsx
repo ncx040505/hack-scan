@@ -161,7 +161,7 @@ export default function NewScan() {
             {showHistory && (targetHistory.length > 0 || target) && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
                 {filteredHistory.length > 0 ? (
-                  filteredHistory.map((item, index) => (
+                  filteredHistory.slice(0, 5).map((item, index) => (
                     <div
                       key={index}
                       className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between group"
