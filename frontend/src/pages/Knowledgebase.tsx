@@ -296,7 +296,21 @@ function ToolCard({
         </div>
       </div>
 
-      <h3 className="font-semibold mb-1">{tool.name}</h3>
+      <h3 className="font-semibold mb-1 flex items-center gap-2 flex-wrap">
+        {tool.name}
+        {tool.tags && tool.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {tool.tags.slice(0, 3).map(tag => (
+              <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                {tag}
+              </span>
+            ))}
+            {tool.tags.length > 3 && (
+              <span className="text-xs text-gray-500">+{tool.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+      </h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
         {tool.description || '暂无描述'}
       </p>
@@ -306,19 +320,6 @@ function ToolCard({
         <span>•</span>
         <span>{formatFileSize(tool.file_size)}</span>
       </div>
-
-      {tool.tags && tool.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {tool.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-              {tag}
-            </span>
-          ))}
-          {tool.tags.length > 3 && (
-            <span className="text-xs text-gray-500">+{tool.tags.length - 3}</span>
-          )}
-        </div>
-      )}
     </div>
   )
 }
