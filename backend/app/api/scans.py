@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.core.database import get_db, get_mongo_db, get_redis
 from app.core.scan_logger import get_scan_logger
+from app.core.vulnerability_fingerprint import severity_rank, vulnerability_fingerprint
 from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, ScanChatMessage
 from app.schemas.scan import (
     ScanTaskCreate, ScanTaskResponse, ScanTaskList,
@@ -252,21 +253,38 @@ async def get_scan_vulnerabilities(
     if severity:
         query = query.where(Vulnerability.severity == severity)
     
-    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     vulns = result.scalars().all()
-    
-    # 总数
-    count_query = select(func.count(Vulnerability.id)).where(
-        Vulnerability.scan_task_id == scan_id
-    )
-    if severity:
-        count_query = count_query.where(Vulnerability.severity == severity)
-    total = (await db.execute(count_query)).scalar()
+
+    def is_better(candidate: Vulnerability, existing: Vulnerability) -> bool:
+        if candidate.llm_remediation and not existing.llm_remediation:
+            return True
+        if candidate.llm_analysis and not existing.llm_analysis:
+            return True
+        candidate_rank = severity_rank(candidate.severity)
+        existing_rank = severity_rank(existing.severity)
+        if candidate_rank != existing_rank:
+            return candidate_rank > existing_rank
+        if candidate.created_at and existing.created_at:
+            return candidate.created_at > existing.created_at
+        return False
+
+    deduped: dict[str, Vulnerability] = {}
+    for vuln in vulns:
+        key = vulnerability_fingerprint(vuln.name, vuln.category, vuln.location)
+        if not key:
+            key = vuln.id
+        existing = deduped.get(key)
+        if not existing or is_better(vuln, existing):
+            deduped[key] = vuln
+
+    deduped_list = list(deduped.values())
+    total = len(deduped_list)
+    items = deduped_list[skip: skip + limit]
     
     return VulnerabilityList(
         total=total,
-        items=[VulnerabilityResponse.model_validate(v) for v in vulns]
+        items=[VulnerabilityResponse.model_validate(v) for v in items]
     )
 
 

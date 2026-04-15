@@ -252,7 +252,7 @@ export interface SecurityTool {
   id: string
   name: string
   description: string | null
-  tool_type: 'script' | 'nuclei' | 'wordlist' | 'config' | 'skill'
+  tool_type: 'script' | 'nuclei' | 'wordlist' | 'config' | 'skill' | 'scanner'
   filename: string
   file_size: number | null
   category: string | null

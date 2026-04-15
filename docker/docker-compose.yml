@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: vulnscanner
+      POSTGRES_INITDB_ARGS: "-c listen_addresses='*'"
     ports:
       - "5432:5432"
     volumes:
@@ -21,6 +22,7 @@ services:
   # MongoDB
   mongodb:
     image: mongo:7
+    command: ["mongod", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
@@ -136,6 +138,7 @@ services:
       - backend
     networks:
       - scanner_network
+    command: sh -c "npm install && npm run dev -- --host"
 
 networks:
   scanner_network:

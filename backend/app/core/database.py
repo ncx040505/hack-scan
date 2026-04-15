@@ -74,6 +74,41 @@ async def init_databases():
                 END $$;
             """)
         )
+        
+        # Add 'SCANNER' to tool type enum, even if the enum name differs from defaults
+        await conn.execute(
+            text("""
+                DO $$
+                DECLARE
+                    enum_name text;
+                BEGIN
+                    -- Try to detect enum name from security_tools.tool_type
+                    SELECT t.typname INTO enum_name
+                    FROM pg_type t
+                    JOIN pg_attribute a ON a.atttypid = t.oid
+                    JOIN pg_class c ON c.oid = a.attrelid
+                    WHERE c.relname = 'security_tools'
+                      AND a.attname = 'tool_type'
+                      AND t.typtype = 'e'
+                    LIMIT 1;
+
+                    -- Fallback to default enum name
+                    IF enum_name IS NULL THEN
+                        enum_name := 'tooltype';
+                    END IF;
+
+                    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = enum_name) THEN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_enum
+                            WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = enum_name)
+                            AND enumlabel = 'SCANNER'
+                        ) THEN
+                            EXECUTE format('ALTER TYPE %I ADD VALUE IF NOT EXISTS %L', enum_name, 'SCANNER');
+                        END IF;
+                    END IF;
+                END $$;
+            """)
+        )
     
     # Create PostgreSQL tables
     from app.models.database import Base

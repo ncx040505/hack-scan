@@ -5,7 +5,7 @@ import aiofiles
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String, text
 from loguru import logger
 
 from app.core.database import get_db
@@ -18,13 +18,22 @@ from app.schemas.scan import (
 settings = get_settings()
 router = APIRouter(prefix="/tools", tags=["tools"])
 
-# 工具存储目录
-TOOLS_DIR = Path("/app/data/tools")
+FALLBACK_TOOLS_DIR = Path("/tmp/shelling_tools")
 ALLOWED_EXTENSIONS = {
     "script": [".py", ".sh", ".bash", ".pl", ".rb", ".js", ".ts", ".go", ".rs", ".ps1"],
     "nuclei": [".yaml", ".yml"],
     "wordlist": [".txt", ".lst", ".dic", ".list"],
     "config": [".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".cfg", ".xml"],
+    "scanner": [
+        # 脚本格式
+        ".py", ".sh", ".bash", ".pl", ".rb", ".js", ".ts", ".go", ".rs", ".ps1",
+        # 压缩包
+        ".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".7z", ".rar",
+        # 二进制可执行文件
+        ".exe", ".dll", ".so", ".dylib", ".bin",
+        # 其他二进制格式
+        ".jar", ".class", ".wasm",
+    ],
     "skill": [
         # 文本格式
         ".py", ".md", ".txt", ".json", ".yaml", ".yml",
@@ -43,20 +52,75 @@ ALLOWED_EXTENSIONS = {
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB（从 10MB 增加到 100MB）
 
 
-def ensure_tools_dir():
-    """确保工具目录存在"""
-    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+def _ensure_tools_dir(base_dir: Path) -> None:
+    """确保指定工具目录存在"""
+    base_dir.mkdir(parents=True, exist_ok=True)
     for tool_type in ToolType:
-        (TOOLS_DIR / tool_type.value).mkdir(exist_ok=True)
+        (base_dir / tool_type.value).mkdir(exist_ok=True)
+
+
+def ensure_tools_dir() -> Path:
+    """确保工具目录存在并返回可用路径"""
+    configured_dir = Path(settings.tools_dir)
+    try:
+        _ensure_tools_dir(configured_dir)
+        return configured_dir
+    except (PermissionError, OSError) as exc:
+        logger.warning(f"Tools dir not writable: {configured_dir}. Falling back to {FALLBACK_TOOLS_DIR}. Reason: {exc}")
+        try:
+            _ensure_tools_dir(FALLBACK_TOOLS_DIR)
+            return FALLBACK_TOOLS_DIR
+        except (PermissionError, OSError) as fallback_exc:
+            logger.error(f"Failed to create tools dir: {FALLBACK_TOOLS_DIR}. Reason: {fallback_exc}")
+            raise HTTPException(status_code=500, detail="工具目录不可写，请检查 TOOLS_DIR 配置或目录权限")
+
+
+async def ensure_tooltype_value(db: AsyncSession, value: str) -> None:
+    """确保数据库 enum 包含指定工具类型"""
+    enum_value = value.upper()
+    await db.execute(
+        text(f"""
+            DO $$
+            DECLARE
+                enum_name text;
+            BEGIN
+                -- Try to detect enum name from security_tools.tool_type
+                SELECT t.typname INTO enum_name
+                FROM pg_type t
+                JOIN pg_attribute a ON a.atttypid = t.oid
+                JOIN pg_class c ON c.oid = a.attrelid
+                WHERE c.relname = 'security_tools'
+                  AND a.attname = 'tool_type'
+                  AND t.typtype = 'e'
+                LIMIT 1;
+
+                -- Fallback to default enum name
+                IF enum_name IS NULL THEN
+                    enum_name := 'tooltype';
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = enum_name) THEN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_enum
+                        WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = enum_name)
+                        AND enumlabel = '{enum_value}'
+                    ) THEN
+                        EXECUTE format('ALTER TYPE %I ADD VALUE IF NOT EXISTS %L', enum_name, '{enum_value}');
+                    END IF;
+                END IF;
+            END $$;
+        """)
+    )
+    await db.commit()
 
 
 def validate_file_extension(filename: str, tool_type: str) -> bool:
     """验证文件扩展名"""
     ext = Path(filename).suffix.lower()
     
-    # 对于 skill 类型，如果没有扩展名，认为是二进制可执行文件
-    if tool_type == "skill" and not ext:
-        logger.info(f"File without extension for skill type: {filename}, treating as binary")
+    # 对于 skill/scanner 类型，如果没有扩展名，认为是二进制可执行文件
+    if tool_type in {"skill", "scanner"} and not ext:
+        logger.info(f"File without extension for {tool_type} type: {filename}, treating as binary")
         return True
     
     allowed = ALLOWED_EXTENSIONS.get(tool_type, [])
@@ -77,7 +141,7 @@ async def upload_tool(
     db: AsyncSession = Depends(get_db)
 ):
     """上传安全工具"""
-    ensure_tools_dir()
+    tools_dir = ensure_tools_dir()
     
     logger.info(f"Upload tool: name={name}, type={tool_type}, file={file.filename}")
     
@@ -85,6 +149,13 @@ async def upload_tool(
     if tool_type not in [t.value for t in ToolType]:
         logger.warning(f"Invalid tool type: {tool_type}")
         raise HTTPException(status_code=400, detail=f"无效的工具类型: {tool_type}")
+
+    if tool_type == "scanner":
+        try:
+            await ensure_tooltype_value(db, tool_type)
+        except Exception as exc:
+            logger.error(f"Failed to ensure tooltype enum: {exc}")
+            raise HTTPException(status_code=500, detail="初始化数据库工具类型失败，请检查数据库权限")
     
     # 验证文件扩展名
     if not validate_file_extension(file.filename, tool_type):
@@ -108,13 +179,13 @@ async def upload_tool(
     tool_id = str(uuid.uuid4())
     ext = Path(file.filename).suffix
     
-    # 对于没有扩展名的 skill 文件，添加 .bin 扩展名
-    if tool_type == "skill" and not ext:
+    # 对于没有扩展名的 skill/scanner 文件，添加 .bin 扩展名
+    if tool_type in {"skill", "scanner"} and not ext:
         ext = ".bin"
-        logger.info(f"No extension for skill file, using .bin: {file.filename}")
+        logger.info(f"No extension for {tool_type} file, using .bin: {file.filename}")
     
     safe_filename = f"{tool_id}{ext}"
-    file_path = TOOLS_DIR / tool_type / safe_filename
+    file_path = tools_dir / tool_type / safe_filename
     
     # 保存文件
     try:
@@ -123,7 +194,7 @@ async def upload_tool(
             await f.write(content)
         
         # 为特定类型的文件设置执行权限
-        if tool_type in ['skill', 'script']:
+        if tool_type in ['skill', 'script', 'scanner']:
             executable_extensions = ['.sh', '.bash', '.pl', '.rb', '.py', '.js', '.bin', '.exe', '']
             file_ext = Path(file_path).suffix
             # 无扩展名或特定扩展名的文件设置为可执行
@@ -195,8 +266,12 @@ async def list_tools(
     count_query = select(func.count(SecurityTool.id))
     
     if tool_type:
-        query = query.where(SecurityTool.tool_type == ToolType(tool_type))
-        count_query = count_query.where(SecurityTool.tool_type == ToolType(tool_type))
+        if tool_type not in [t.value for t in ToolType]:
+            raise HTTPException(status_code=400, detail=f"无效的工具类型: {tool_type}")
+        # Compare as text to avoid enum mismatch errors on older schemas
+        normalized_type = tool_type.lower()
+        query = query.where(func.lower(cast(SecurityTool.tool_type, String)) == normalized_type)
+        count_query = count_query.where(func.lower(cast(SecurityTool.tool_type, String)) == normalized_type)
     
     if category:
         query = query.where(SecurityTool.category == category)

@@ -34,6 +34,7 @@ class ToolType(str, Enum):
     WORDLIST = "wordlist"       # 字典文件
     CONFIG = "config"           # 配置文件
     SKILL = "skill"             # AI 可调用的 Skill（Python 脚本）
+    SCANNER = "scanner"         # 自定义扫描器
 
 
 class ScanTask(Base):

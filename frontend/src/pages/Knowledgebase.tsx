@@ -13,6 +13,7 @@ const toolTypeIcons: Record<string, React.ReactNode> = {
   wordlist: <List className="w-5 h-5" />,
   config: <Settings className="w-5 h-5" />,
   skill: <Zap className="w-5 h-5" />,
+  scanner: <Search className="w-5 h-5" />,
 }
 
 const toolTypeLabels: Record<string, string> = {
@@ -21,6 +22,7 @@ const toolTypeLabels: Record<string, string> = {
   wordlist: '字典',
   config: '配置文件',
   skill: 'AI Skill',
+  scanner: '扫描器',
 }
 
 export default function Knowledgebase() {
@@ -31,7 +33,7 @@ export default function Knowledgebase() {
   const [selectedTool, setSelectedTool] = useState<SecurityTool | null>(null)
   const [showContent, setShowContent] = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['tools', filterType],
     queryFn: () => getTools({ 
       limit: 100,
@@ -39,6 +41,11 @@ export default function Knowledgebase() {
       enabled_only: false
     }),
   })
+
+  const toolsErrorMessage = isError
+    // @ts-expect-error axios error response
+    ? (error?.response?.data?.detail || (error as Error).message)
+    : null
 
   const deleteMutation = useMutation({
     mutationFn: deleteTool,
@@ -69,7 +76,7 @@ export default function Knowledgebase() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">知识库</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">管理安全工具、脚本和模板</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">管理安全工具、脚本、模板和扫描器</p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
@@ -116,17 +123,22 @@ export default function Knowledgebase() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-6 gap-4 mb-6">
         <StatCard label="总工具数" value={tools.length} />
         <StatCard label="脚本" value={tools.filter(t => t.tool_type === 'script').length} />
         <StatCard label="Nuclei 模板" value={tools.filter(t => t.tool_type === 'nuclei').length} />
         <StatCard label="字典" value={tools.filter(t => t.tool_type === 'wordlist').length} />
         <StatCard label="配置" value={tools.filter(t => t.tool_type === 'config').length} />
+        <StatCard label="扫描器" value={tools.filter(t => t.tool_type === 'scanner').length} />
       </div>
 
       {/* Tools Grid */}
       {isLoading ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">加载中...</div>
+      ) : isError ? (
+        <div className="text-center py-12 text-red-500">
+          加载失败: {toolsErrorMessage}
+        </div>
       ) : filteredTools.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -322,7 +334,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
                 type="file"
                 onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".py,.sh,.bash,.yaml,.yml,.txt,.lst,.dic,.json,.toml,.ini"
+                accept=".py,.sh,.bash,.pl,.rb,.js,.ts,.go,.rs,.ps1,.yaml,.yml,.txt,.lst,.dic,.list,.json,.toml,.ini,.conf,.cfg,.xml,.md,.zip,.tar,.tgz,.tar.gz,.tar.bz2,.7z,.rar,.exe,.dll,.so,.dylib,.bin,.jar,.class,.wasm,.db,.sqlite,.sqlite3,.dat,.csv"
               />
             </div>
           </div>
@@ -340,6 +352,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               <option value="wordlist">字典文件</option>
               <option value="config">配置文件</option>
               <option value="skill">AI Skill</option>
+              <option value="scanner">扫描器</option>
             </select>
             {formData.tool_type === 'skill' && (
               <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm">

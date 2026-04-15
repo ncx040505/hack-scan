@@ -15,6 +15,7 @@ from app.core.database import create_celery_session
 from app.core.scan_logger import get_scan_logger, ScanLogger
 from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, MessageRole
 from app.core.config import get_settings
+from app.core.vulnerability_fingerprint import severity_rank, vulnerability_fingerprint
 
 celery_settings = get_settings()
 
@@ -27,6 +28,68 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+def _normalize_unconfirmed_severity(severity: str | None) -> str:
+    """未确认的发现不应标记为严重/高危"""
+    if not severity:
+        return "medium"
+    normalized = severity.lower()
+    if normalized in {"critical", "high"}:
+        return "medium"
+    if normalized in {"medium", "low", "info"}:
+        return normalized
+    return "medium"
+
+
+def _condense_agent_summary(agent_summary: str | dict | None) -> str:
+    """将 AI Agent 总结精简为可读的一句话"""
+    if not agent_summary:
+        return ""
+    summary_data = agent_summary
+    if isinstance(agent_summary, str):
+        try:
+            summary_data = json.loads(agent_summary)
+        except json.JSONDecodeError:
+            return agent_summary.strip()[:200]
+    
+    if not isinstance(summary_data, dict):
+        return str(summary_data)[:200]
+    
+    final_summary = summary_data.get("final_summary") or summary_data.get("finalsummary") or summary_data
+    confirmed_list = (
+        final_summary.get("confirmed_findings")
+        or final_summary.get("confirmedfindings")
+        or []
+    )
+    unconfirmed_list = (
+        final_summary.get("unconfirmed_findings")
+        or final_summary.get("unconfirmedfindings")
+        or []
+    )
+    confirmed_titles = [
+        item.get("title") for item in confirmed_list
+        if isinstance(item, dict) and item.get("title")
+    ]
+    unconfirmed_titles = [
+        item.get("title") for item in unconfirmed_list
+        if isinstance(item, dict) and item.get("title")
+    ]
+    
+    parts = []
+    if confirmed_list:
+        parts.append(f"已确认 {len(confirmed_list)} 个问题")
+    if unconfirmed_list:
+        parts.append(f"待确认 {len(unconfirmed_list)} 个问题")
+    if confirmed_titles:
+        parts.append(f"重点关注：{', '.join(confirmed_titles[:2])}")
+    elif unconfirmed_titles:
+        parts.append(f"待确认重点：{', '.join(unconfirmed_titles[:2])}")
+    
+    if not parts:
+        return ""
+    
+    return "AI Agent 结果：" + "；".join(parts) + "。"
 
 
 async def _fetch_agent_configs(session_factory) -> tuple[dict | None, dict | None]:
@@ -95,6 +158,33 @@ async def _update_scan_status(
         await session.commit()
 
 
+def _is_better_finding(candidate: ScanFinding, existing: ScanFinding) -> bool:
+    """选择更具代表性的发现（严重性更高、证据更充分）"""
+    candidate_rank = severity_rank(candidate.severity)
+    existing_rank = severity_rank(existing.severity)
+    if candidate_rank != existing_rank:
+        return candidate_rank > existing_rank
+    candidate_evidence = len(candidate.evidence or "")
+    existing_evidence = len(existing.evidence or "")
+    if candidate_evidence != existing_evidence:
+        return candidate_evidence > existing_evidence
+    return len(candidate.description or "") > len(existing.description or "")
+
+
+def _dedupe_findings(findings: list[ScanFinding]) -> list[ScanFinding]:
+    if not findings:
+        return []
+    deduped: dict[str, ScanFinding] = {}
+    for finding in findings:
+        key = vulnerability_fingerprint(finding.name, finding.category, finding.location)
+        if not key:
+            key = str(uuid.uuid4())
+        existing = deduped.get(key)
+        if not existing or _is_better_finding(finding, existing):
+            deduped[key] = finding
+    return list(deduped.values())
+
+
 async def _save_findings(session_factory, scan_task_id: str, findings: list[ScanFinding]):
     """将扫描发现写入漏洞表"""
     if not findings:
@@ -108,8 +198,25 @@ async def _save_findings(session_factory, scan_task_id: str, findings: list[Scan
         "info": SeverityLevel.INFO,
     }
 
+    deduped_findings = _dedupe_findings(findings)
+    if not deduped_findings:
+        return
+
     async with session_factory() as session:
-        for finding in findings:
+        existing_result = await session.execute(
+            select(Vulnerability.name, Vulnerability.category, Vulnerability.location)
+            .where(Vulnerability.scan_task_id == scan_task_id)
+        )
+        existing_keys = {
+            vulnerability_fingerprint(name, category, location)
+            for name, category, location in existing_result.all()
+        }
+
+        for finding in deduped_findings:
+            key = vulnerability_fingerprint(finding.name, finding.category, finding.location)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
             vuln = Vulnerability(
                 id=str(uuid.uuid4()),
                 scan_task_id=scan_task_id,
@@ -192,6 +299,62 @@ async def _analyze_vulnerabilities(session_factory, scan_task_id: str, scan_logg
                 f"🎯 漏洞分析完成",
                 f"已为 {analyzed_count} 个关键漏洞生成修复建议"
             )
+
+
+async def _analyze_attack_path(session_factory, scan_task_id: str, target: str, findings: list, scan_logger):
+    """生成攻击路径分析并写入扫描任务"""
+    if not findings:
+        return
+    
+    open_ports = []
+    vulnerabilities = []
+    for f in findings:
+        vuln_dict = {
+            "id": str(uuid.uuid4()),
+            "name": f.name,
+            "severity": f.severity,
+            "category": f.category,
+            "description": f.description,
+            "location": f.location,
+            "evidence": f.evidence,
+        }
+        if f.name.startswith("Open port:"):
+            open_ports.append(vuln_dict)
+        else:
+            vulnerabilities.append(vuln_dict)
+    
+    if not open_ports and not vulnerabilities:
+        return
+    
+    scan_logger.llm(
+        "🧭 开始生成攻击路径分析",
+        f"漏洞: {len(vulnerabilities)}，开放端口: {len(open_ports)}"
+    )
+    
+    try:
+        analyzer = get_analyzer()
+        analysis_result = await analyzer.analyze_attack_path(
+            target=target,
+            vulnerabilities=vulnerabilities,
+            open_ports=open_ports
+        )
+        result_dict = analysis_result.model_dump()
+    except Exception as e:
+        logger.error(f"Attack path analysis failed: {e}")
+        scan_logger.error("❌ 攻击路径分析失败", str(e))
+        return
+    
+    async with session_factory() as session:
+        result = await session.execute(
+            select(ScanTask).where(ScanTask.id == scan_task_id)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            return
+        task.attack_path_analysis = result_dict
+        await session.commit()
+    
+    scan_logger.success("✅ 攻击路径分析完成", f"攻击链: {len(result_dict.get('attack_chains', []))}")
 
 
 async def _save_agent_pause(
@@ -315,8 +478,11 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
         nonlocal findings, errors
         
         # 确定要运行的扫描器
-        available = await get_available_scanners()
-        scan_logger.info("🔍 检测可用扫描器", f"可用: {[s.value for s in available]}")
+        available, uploaded_scanners = await get_available_scanners()
+        scan_logger.info(
+            "🔍 检测可用扫描器",
+            f"可用: {[s.value for s in available] + uploaded_scanners}"
+        )
         
         scanners_to_run = []
         if config.get("enable_port_scan", True) and ScannerType.NMAP in available:
@@ -498,21 +664,34 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                     for af in agent_findings:
                         keyword = af.get('keyword', 'security issue')
                         tool_used = af.get('tool', 'unknown')
+                        raw_severity = af.get('severity')
+                        severity = _normalize_unconfirmed_severity(raw_severity)
+                        if raw_severity and raw_severity.lower() != severity:
+                            severity_display = f"{raw_severity} -> {severity}"
+                        elif raw_severity is None:
+                            severity_display = f"unknown -> {severity}"
+                        else:
+                            severity_display = severity
                         finding = ScanFinding(
                             scanner=ScannerType.CUSTOM,
                             name=f"{keyword.upper()} 检测到潜在安全风险",
-                            severity=af.get('severity', 'medium'),
+                            severity=severity,
                             category=f"ai_{keyword.replace(' ', '_')}",
                             description=f"AI Agent 在使用 {tool_used} 工具测试时检测到潜在的 {keyword} 安全问题。建议进一步人工验证。",
                             location=target,
                             evidence=af.get('snippet', '')[:4000],
                             raw_data=af,
-                            metadata={"detected_by": "ai_agent", "tool": tool_used, "keyword": keyword}
+                            metadata={
+                                "detected_by": "ai_agent",
+                                "tool": tool_used,
+                                "keyword": keyword,
+                                "raw_severity": raw_severity,
+                            }
                         )
                         findings.append(finding)
                         scan_logger.info(
                             f"➕ 添加 AI 发现",
-                            f"类型: {keyword}, 严重性: {af.get('severity')}"
+                            f"类型: {keyword}, 严重性: {severity_display}"
                         )
                 
                 # 解析 final_summary 中的结构化漏洞信息
@@ -618,6 +797,9 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 scan_logger.error("❌ AI Agent 执行失败", str(e))
                 errors.append(f"AI Agent: {str(e)}")
         
+        # 去重扫描发现，避免重复漏洞影响摘要与保存
+        findings = _dedupe_findings(findings)
+
         # LLM 总结分析
         if findings or scan_context.get("agent_summary"):
             scan_logger.llm("🤖 AI 开始生成扫描报告", f"综合 {len(findings)} 个发现和 AI Agent 测试结果")
@@ -654,10 +836,6 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 llm_summary = result.executive_summary
                 risk_score = result.risk_score
                 
-                # 如果有 Agent 总结，合并到 llm_summary
-                if scan_context.get("agent_summary"):
-                    llm_summary = f"{llm_summary}\n\n**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
-                
                 scan_logger.llm(
                     "📥 AI 分析完成", 
                     f"风险评分: {risk_score}/100\n\n{llm_summary}"
@@ -676,7 +854,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 
                 # 如果 LLM 分析失败但有 Agent 总结，使用 Agent 总结
                 if scan_context.get("agent_summary"):
-                    llm_summary = f"**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
+                    llm_summary = _condense_agent_summary(scan_context.get("agent_summary")) or "AI Agent 已完成测试，但未生成可读摘要。"
         else:
             scan_logger.info("ℹ️ 未发现漏洞，跳过 AI 分析")
 
@@ -693,6 +871,13 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
             loop.run_until_complete(_analyze_vulnerabilities(
                 session_factory=session_factory,
                 scan_task_id=scan_task_id,
+                scan_logger=scan_logger
+            ))
+            loop.run_until_complete(_analyze_attack_path(
+                session_factory=session_factory,
+                scan_task_id=scan_task_id,
+                target=target,
+                findings=findings,
                 scan_logger=scan_logger
             ))
         
@@ -918,14 +1103,14 @@ def resume_scan(self, scan_task_id: str):
                     scan_info=scan_info
                 ))
                 
-                llm_summary = f"{result.executive_summary}\n\n**AI Agent 测试总结:**\n{scan_context['agent_summary']}"
+                llm_summary = result.executive_summary
                 risk_score = result.risk_score
                 
                 scan_logger.llm("📥 AI 分析完成", f"风险评分: {risk_score}/100")
                 
             except Exception as e:
                 logger.error(f"LLM analysis failed: {e}")
-                llm_summary = f"**AI Agent 测试总结:**\n{scan_context.get('agent_summary', 'N/A')}"
+                llm_summary = _condense_agent_summary(scan_context.get("agent_summary")) or "AI Agent 已完成测试，但未生成可读摘要。"
         
         # 更新扫描状态为完成
         loop.run_until_complete(_update_scan_status(

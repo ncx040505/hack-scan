@@ -135,7 +135,7 @@ class SecurityToolCreate(BaseModel):
     """创建安全工具"""
     name: str = Field(..., max_length=200)
     description: str | None = None
-    tool_type: str = Field(..., pattern="^(script|nuclei|wordlist|config)$")
+    tool_type: str = Field(..., pattern="^(script|nuclei|wordlist|config|skill|scanner)$")
     category: str | None = None
     tags: list[str] = []
     usage_instructions: str | None = None

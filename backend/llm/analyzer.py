@@ -241,7 +241,7 @@ class VulnAnalyzer:
         prompt = ChatPromptTemplate.from_messages([
             ("system", """你是一名安全顾问，正在为客户生成漏洞扫描报告摘要。
 请提供：
-1. 面向管理层的执行摘要（简洁明了）
+1. 面向管理层的执行摘要（用通俗、自然的中文，2-4 句，不要 Markdown、列表或标题；只保留用户需要的信息，避免技术细节）
 2. 基于发现的漏洞给出风险评分
 3. 突出最关键的安全问题
 4. 优先级排序的修复建议
@@ -645,11 +645,20 @@ class VulnAnalyzer:
             if v.get('severity') in ['critical', 'high']
         ][:5]
         
+        if vuln_count == 0:
+            summary = f"已完成对 {target} 的安全扫描，未发现明显漏洞。当前整体风险较低。"
+        else:
+            summary = (
+                f"已完成对 {target} 的安全扫描，发现 {vuln_count} 个安全问题，"
+                f"其中严重 {critical_count} 个、高危 {high_count} 个。"
+                "建议优先处理高风险问题并安排后续复测。"
+            )
+
         return ScanSummaryResult(
-            executive_summary=f"对 {target} 进行了安全扫描，共发现 {vuln_count} 个安全问题，其中严重: {critical_count}，高危: {high_count}",
+            executive_summary=summary,
             risk_score=risk_score,
             critical_findings=critical_findings or ["未发现严重安全问题"],
-            attack_surface_analysis=f"目标暴露了多个潜在攻击面，建议优先处理高危漏洞",
+            attack_surface_analysis="目标暴露了多个潜在攻击面，建议优先处理高危漏洞",
             priority_recommendations=[
                 "优先修复所有严重和高危漏洞",
                 "加强输入验证和输出编码",

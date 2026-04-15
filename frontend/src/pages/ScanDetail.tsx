@@ -866,15 +866,49 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
   const actualVulns = vulns?.items.filter((v: Vulnerability) => !v.name.startsWith('Open port:')) || []
   const [exportFormat, setExportFormat] = useState<string | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
 
   // 按严重程度分组
   const criticalVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'critical')
   const highVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'high')
   const mediumVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'medium')
   const lowVulns = actualVulns.filter((v: Vulnerability) => v.severity === 'low')
+  const keyVulns = [...criticalVulns, ...highVulns].slice(0, 10)
+  const fallbackSummary = actualVulns.length === 0
+    ? `已完成对 ${scan.target} 的安全扫描，未发现明显漏洞。`
+    : (
+        `已完成对 ${scan.target} 的安全扫描，发现 ${actualVulns.length} 个安全问题，`
+        + `其中严重 ${criticalVulns.length} 个、高危 ${highVulns.length} 个。`
+        + '建议优先处理高风险问题并安排复测。'
+      )
+  const summaryText: string = (scan.llm_summary?.trim() || fallbackSummary)
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')
+    .replace(/\s*\n+\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const handleClick = (event: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(event.target as Node)) {
+        setExportMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+    }
+  }, [exportMenuOpen])
 
   // 导出报告
   const handleExport = async (format: string) => {
+    setExportMenuOpen(false)
     setIsExporting(true)
     setExportFormat(format)
     
@@ -1019,13 +1053,18 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
 
             {/* 导出按钮 */}
             <div className="flex items-center gap-2">
-              <div className="relative group">
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
                   <Download className="w-4 h-4" />
                   导出报告
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 hidden group-hover:block z-10">
+                {exportMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
                   {['markdown', 'html', 'json', 'csv'].map(fmt => (
                     <button
                       key={fmt}
@@ -1038,41 +1077,55 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
                       {isExporting && exportFormat === fmt && <Loader2 className="w-4 h-4 animate-spin" />}
                     </button>
                   ))}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* AI 分析摘要（结构化格式） */}
-        {scan.llm_summary && (
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-4">
-              <Brain className="w-5 h-5 text-purple-500" />
-              <h3 className="font-semibold">AI 分析摘要</h3>
-            </div>
-            <div className="prose dark:prose-invert max-w-none">
-              <div className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{scan.llm_summary}</div>
-            </div>
+        {/* 报告摘要（可读格式） */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2 mb-4">
+            <Brain className="w-5 h-5 text-purple-500" />
+            <h3 className="font-semibold">报告摘要</h3>
           </div>
-        )}
+          <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+            {summaryText}
+          </p>
+        </div>
 
-        {/* 漏洞详情列表 */}
+        {/* 关键漏洞（简要） */}
         <div className="p-6">
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <h3 className="font-semibold mb-2 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-500" />
-            漏洞详情
+            关键漏洞
           </h3>
-          
-          {actualVulns.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            仅展示严重/高危漏洞，完整列表请查看「漏洞信息」。
+          </p>
+          {keyVulns.length === 0 ? (
+            <div className="text-center py-6 text-gray-500">
               <Shield className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>未发现漏洞</p>
+              <p>未发现严重/高危漏洞</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {actualVulns.map((vuln: Vulnerability, index: number) => (
-                <VulnerabilityCard key={vuln.id} vuln={vuln} index={index + 1} />
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {keyVulns.map((vuln: Vulnerability) => (
+                <div key={vuln.id} className="py-3 flex items-start gap-3">
+                  <SeverityBadge severity={vuln.severity} />
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">{vuln.name}</p>
+                    {vuln.location && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{vuln.location}</p>
+                    )}
+                    {vuln.description && (
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                        {vuln.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -1087,97 +1140,6 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
         </div>
       )}
     </>
-  )
-}
-
-// 漏洞卡片组件 - 结构化显示
-function VulnerabilityCard({ vuln, index }: { vuln: Vulnerability; index: number }) {
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-400 w-6">{index}.</span>
-          <SeverityBadge severity={vuln.severity} />
-          <div>
-            <h4 className="font-medium">{vuln.name}</h4>
-            {vuln.location && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{vuln.location}</p>
-            )}
-          </div>
-        </div>
-        {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-      </button>
-
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
-          {/* 基本信息 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">漏洞类型</p>
-              <p className="text-sm">{vuln.category || '未分类'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">影响位置</p>
-              <p className="text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{vuln.location || '-'}</p>
-            </div>
-          </div>
-
-          {/* 漏洞描述 */}
-          {vuln.description && (
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">漏洞描述</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.description}</p>
-            </div>
-          )}
-
-          {/* 证据 */}
-          {vuln.evidence && (
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">发现证据</p>
-              <pre className="text-xs bg-gray-100 dark:bg-gray-700 p-3 rounded overflow-x-auto whitespace-pre-wrap">{vuln.evidence}</pre>
-            </div>
-          )}
-
-          {/* AI 分析 */}
-          {vuln.llm_analysis && (
-            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-              <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 mb-2 text-sm font-medium">
-                <Brain className="w-4 h-4" />
-                AI 分析
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.llm_analysis}</p>
-            </div>
-          )}
-
-          {/* 修复建议 */}
-          {vuln.llm_remediation && (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400 mb-2 text-sm font-medium">
-                <ShieldCheck className="w-4 h-4" />
-                修复建议
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{vuln.llm_remediation}</p>
-            </div>
-          )}
-
-          {/* 误报评分 */}
-          {vuln.llm_false_positive_score !== null && vuln.llm_false_positive_score !== undefined && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">误报可能性:</span>
-              <span className={`font-medium ${
-                vuln.llm_false_positive_score > 70 ? 'text-yellow-600' :
-                vuln.llm_false_positive_score > 40 ? 'text-orange-600' : 'text-green-600'
-              }`}>{vuln.llm_false_positive_score}%</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   )
 }
 

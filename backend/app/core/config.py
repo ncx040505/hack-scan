@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     scan_timeout: int = 3600  # 1 hour
     rate_limit_per_target: int = 10  # requests per second
     scan_temp_dir: str = "/tmp/shelling_scans"  # 扫描结果临时目录
+    tools_dir: str = "/app/data/tools"  # 知识库存储目录
     
     # Security
     secret_key: str = "change-me-in-production"

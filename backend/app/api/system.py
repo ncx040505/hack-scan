@@ -14,7 +14,7 @@ async def health_check():
 @router.get("/scanners")
 async def list_scanners():
     """列出可用的扫描器"""
-    available = await get_available_scanners()
+    available, uploaded = await get_available_scanners()
     return {
-        "available_scanners": [s.value for s in available]
+        "available_scanners": [s.value for s in available] + uploaded
     }
