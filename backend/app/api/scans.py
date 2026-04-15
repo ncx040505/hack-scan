@@ -36,6 +36,7 @@ async def create_scan(
         scan_type=scan_req.scan_type,
         status=ScanStatus.PENDING,
         config=scan_req.config.model_dump(),
+        remark=scan_req.remark,
     )
     
     db.add(scan_task)
@@ -63,7 +64,8 @@ async def create_scan(
         created_at=scan_task.created_at,
         llm_summary=scan_task.llm_summary,
         llm_risk_score=scan_task.llm_risk_score,
-        vulnerability_count=0
+        vulnerability_count=0,
+        remark=scan_task.remark
     )
 
 
@@ -109,7 +111,8 @@ async def list_scans(
             created_at=task.created_at,
             llm_summary=task.llm_summary,
             llm_risk_score=task.llm_risk_score,
-            vulnerability_count=vuln_count
+            vulnerability_count=vuln_count,
+            remark=task.remark
         ))
     
     return ScanTaskList(total=total, items=items)
@@ -146,7 +149,8 @@ async def get_scan(
         created_at=task.created_at,
         llm_summary=task.llm_summary,
         llm_risk_score=task.llm_risk_score,
-        vulnerability_count=vuln_count
+        vulnerability_count=vuln_count,
+        remark=task.remark
     )
 
 

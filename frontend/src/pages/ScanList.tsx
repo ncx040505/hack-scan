@@ -270,6 +270,9 @@ export default function ScanList() {
                   </span>
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-200">
+                  备注
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-200">
                   操作
                 </th>
               </tr>
@@ -450,6 +453,9 @@ function ScanRow({
       </td>
       <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
         {format(new Date(scan.created_at), 'yyyy-MM-dd HH:mm')}
+      </td>
+      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-xs truncate" title={scan.remark || ''}>
+        {scan.remark || '-'}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">

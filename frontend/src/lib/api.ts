@@ -36,6 +36,7 @@ export interface ScanTask {
   llm_summary: string | null
   llm_risk_score: number | null
   vulnerability_count: number
+  remark?: string | null
 }
 
 export interface Vulnerability {
@@ -63,11 +64,12 @@ export async function getScan(scanId: string) {
   return data
 }
 
-export async function createScan(target: string, scanType: string, config: Partial<ScanConfig>) {
+export async function createScan(target: string, scanType: string, config: Partial<ScanConfig>, remark?: string) {
   const { data } = await api.post<ScanTask>('/scans', {
     target,
     scan_type: scanType,
     config,
+    remark,
   })
   return data
 }

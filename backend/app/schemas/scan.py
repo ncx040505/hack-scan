@@ -37,6 +37,7 @@ class ScanTaskCreate(BaseModel):
     target: str = Field(..., description="目标 URL 或 IP 地址")
     scan_type: str = Field(default="quick", pattern="^(full|quick|custom)$")
     config: ScanConfig = Field(default_factory=ScanConfig)
+    remark: str | None = Field(default=None, description="扫描备注")
 
 
 class ScanTaskResponse(BaseModel):
@@ -52,6 +53,7 @@ class ScanTaskResponse(BaseModel):
     llm_summary: str | None
     llm_risk_score: int | None
     vulnerability_count: int = 0
+    remark: str | None = None
     
     class Config:
         from_attributes = True

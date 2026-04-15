@@ -56,6 +56,9 @@ class ScanTask(Base):
     llm_risk_score = Column(Integer)  # AI 评估的风险分数 0-100
     attack_path_analysis = Column(JSON)  # AI 生成的攻击路径分析
     
+    # 用户备注
+    remark = Column(Text)  # 用户对扫描的备注
+    
     vulnerabilities = relationship("Vulnerability", back_populates="scan_task")
 
 

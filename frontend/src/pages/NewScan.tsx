@@ -32,6 +32,7 @@ function getUrlPort(target: string): string | null {
 export default function NewScan() {
   const navigate = useNavigate()
   const [target, setTarget] = useState('')
+  const [remark, setRemark] = useState('')
   const [scanType, setScanType] = useState('full')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isUrlTarget, setIsUrlTarget] = useState(false)
@@ -120,7 +121,7 @@ export default function NewScan() {
   }, [personas])
 
   const mutation = useMutation({
-    mutationFn: () => createScan(target, scanType, config),
+    mutationFn: () => createScan(target, scanType, config, remark || undefined),
     onSuccess: (data) => {
       navigate(`/scans/${data.id}`)
     },
@@ -212,6 +213,18 @@ export default function NewScan() {
               </span>
             </div>
           )}
+        </div>
+
+        {/* Remark */}
+        <div>
+          <label className="block text-sm font-medium mb-2">备注（可选）</label>
+          <textarea
+            value={remark}
+            onChange={e => setRemark(e.target.value)}
+            placeholder="为此扫描任务添加备注..."
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            rows={3}
+          />
         </div>
 
         {/* Scan Type */}
