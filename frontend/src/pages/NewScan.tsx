@@ -43,7 +43,7 @@ export default function NewScan() {
     rate_limit: 10,
     ai_max_iterations: 0,  // 0 表示无限制
     ai_custom_prompt: '',
-    ai_persona_id: null,  // null 表示使用默认人格
+    ai_persona_id: null,  // 在 personas 加载后会自动设置为默认人格
   })
 
   // 目标历史记录管理
@@ -108,6 +108,16 @@ export default function NewScan() {
     queryKey: ['personas-brief'],
     queryFn: getPersonasBrief,
   })
+
+  // 在 personas 加载时，自动设置默认人格
+  useEffect(() => {
+    if (personas && personas.length > 0) {
+      const defaultPersona = personas.find(p => p.is_default)
+      if (defaultPersona && config.ai_persona_id === null) {
+        setConfig(prev => ({ ...prev, ai_persona_id: defaultPersona.id }))
+      }
+    }
+  }, [personas])
 
   const mutation = useMutation({
     mutationFn: () => createScan(target, scanType, config),
@@ -299,10 +309,9 @@ export default function NewScan() {
                 </label>
                 <select
                   value={config.ai_persona_id || ''}
-                  onChange={e => setConfig({ ...config, ai_persona_id: e.target.value || null })}
+                  onChange={e => setConfig({ ...config, ai_persona_id: e.target.value })}
                   className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">使用默认人格</option>
                   {personas?.map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name}
