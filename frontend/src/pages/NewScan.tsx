@@ -175,6 +175,7 @@ export default function NewScan() {
                       </button>
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => removeFromHistory(item)}
                         className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
                         title="删除历史记录"
