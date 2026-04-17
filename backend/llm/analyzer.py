@@ -242,9 +242,17 @@ class VulnAnalyzer:
             ("system", """你是一名安全顾问，正在为客户生成漏洞扫描报告摘要。
 请提供：
 1. 面向管理层的执行摘要（用通俗、自然的中文，2-4 句，不要 Markdown、列表或标题；只保留用户需要的信息，避免技术细节）
-2. 基于发现的漏洞给出风险评分
+2. 基于发现的实际漏洞给出风险评分（0-100）
 3. 突出最关键的安全问题
 4. 优先级排序的修复建议
+
+重要指导：
+- 如果未发现漏洞，风险评分应为 0-10 分（低风险）
+- 如果只发现 info/low 级漏洞，风险评分应为 10-30 分
+- 如果发现 medium 级漏洞，风险评分应为 30-60 分
+- 如果发现 high 级漏洞，风险评分应为 60-80 分
+- 如果发现 critical 级漏洞，风险评分应为 80-100 分
+- 风险评分必须与实际发现的漏洞严重程度相符
 
 {format_instructions}"""),
             ("human", """扫描目标: {target}
@@ -272,6 +280,9 @@ class VulnAnalyzer:
                 "vuln_summary": vuln_summary or "未发现漏洞",
                 "format_instructions": parser.get_format_instructions()
             })
+            
+            # 验证风险评分与漏洞数量的一致性
+            result = self._validate_risk_score(result, vulnerabilities)
             return result
         except Exception as e:
             logger.error(f"LLM summarization failed: {e}")
@@ -623,6 +634,42 @@ class VulnAnalyzer:
             ],
             false_positive_likelihood=30
         )
+    
+    def _validate_risk_score(
+        self,
+        result: ScanSummaryResult,
+        vulnerabilities: list[dict]
+    ) -> ScanSummaryResult:
+        """验证并调整风险评分，确保与实际漏洞严重程度相符"""
+        vuln_count = len(vulnerabilities)
+        critical_count = sum(1 for v in vulnerabilities if v.get('severity') == 'critical')
+        high_count = sum(1 for v in vulnerabilities if v.get('severity') == 'high')
+        medium_count = sum(1 for v in vulnerabilities if v.get('severity') == 'medium')
+        
+        # 根据实际漏洞情况调整分数
+        if vuln_count == 0:
+            # 没有漏洞，分数应该是 0-10
+            if result.risk_score > 10:
+                logger.warning(f"Risk score too high ({result.risk_score}) for scan with no vulnerabilities, clamping to 5")
+                result.risk_score = 5
+        elif critical_count == 0 and high_count == 0 and medium_count == 0:
+            # 只有低级和信息性漏洞，分数应该是 10-30
+            if result.risk_score > 30:
+                logger.warning(f"Risk score too high ({result.risk_score}) for scan with only low/info vulnerabilities, clamping to 20")
+                result.risk_score = 20
+        elif critical_count == 0 and high_count == 0:
+            # 只有 medium 级以下漏洞，分数应该是 20-50
+            if result.risk_score > 50:
+                logger.warning(f"Risk score too high ({result.risk_score}) for scan with only medium/low vulnerabilities, clamping to 40")
+                result.risk_score = 40
+        elif critical_count == 0:
+            # 有 high 但没有 critical，分数应该是 60-80
+            if result.risk_score > 80:
+                logger.warning(f"Risk score too high ({result.risk_score}) for scan without critical vulnerabilities, clamping to 75")
+                result.risk_score = 75
+        # 如果有 critical 漏洞，80-100 的分数是合理的
+        
+        return result
     
     def _get_default_summary(
         self,
