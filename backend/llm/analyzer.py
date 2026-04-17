@@ -640,34 +640,26 @@ class VulnAnalyzer:
         result: ScanSummaryResult,
         vulnerabilities: list[dict]
     ) -> ScanSummaryResult:
-        """验证并调整风险评分，确保与实际漏洞严重程度相符"""
+        """验证并调整风险评分，使用启发式算法确保与实际漏洞严重程度相符"""
         vuln_count = len(vulnerabilities)
         critical_count = sum(1 for v in vulnerabilities if v.get('severity') == 'critical')
         high_count = sum(1 for v in vulnerabilities if v.get('severity') == 'high')
         medium_count = sum(1 for v in vulnerabilities if v.get('severity') == 'medium')
+        low_count = sum(1 for v in vulnerabilities if v.get('severity') in ['low', 'info'])
         
-        # 根据实际漏洞情况调整分数
-        if vuln_count == 0:
-            # 没有漏洞，分数应该是 0-10
-            if result.risk_score > 10:
-                logger.warning(f"Risk score too high ({result.risk_score}) for scan with no vulnerabilities, clamping to 5")
-                result.risk_score = 5
-        elif critical_count == 0 and high_count == 0 and medium_count == 0:
-            # 只有低级和信息性漏洞，分数应该是 10-30
-            if result.risk_score > 30:
-                logger.warning(f"Risk score too high ({result.risk_score}) for scan with only low/info vulnerabilities, clamping to 20")
-                result.risk_score = 20
-        elif critical_count == 0 and high_count == 0:
-            # 只有 medium 级以下漏洞，分数应该是 20-50
-            if result.risk_score > 50:
-                logger.warning(f"Risk score too high ({result.risk_score}) for scan with only medium/low vulnerabilities, clamping to 40")
-                result.risk_score = 40
-        elif critical_count == 0:
-            # 有 high 但没有 critical，分数应该是 60-80
-            if result.risk_score > 80:
-                logger.warning(f"Risk score too high ({result.risk_score}) for scan without critical vulnerabilities, clamping to 75")
-                result.risk_score = 75
-        # 如果有 critical 漏洞，80-100 的分数是合理的
+        # 使用启发式算法计算基准分数
+        baseline_score = min(100, critical_count * 20 + high_count * 10 + medium_count * 3 + low_count * 1)
+        
+        # 如果 LLM 的分数与基准分数差异过大，使用基准分数
+        diff = abs(result.risk_score - baseline_score)
+        
+        if diff > 20:  # 差异超过 20 分则警告并调整
+            old_score = result.risk_score
+            result.risk_score = baseline_score
+            logger.warning(
+                f"Risk score adjusted from {old_score} to {baseline_score} (baseline). "
+                f"Vulnerabilities: {critical_count} critical, {high_count} high, {medium_count} medium, {low_count} low"
+            )
         
         return result
     
