@@ -640,29 +640,40 @@ class VulnAnalyzer:
         result: ScanSummaryResult,
         vulnerabilities: list[dict]
     ) -> ScanSummaryResult:
-        """验证并调整风险评分，使用启发式算法确保与实际漏洞严重程度相符"""
-        vuln_count = len(vulnerabilities)
+        """验证并调整风险评分，确保与实际漏洞严重程度相符"""
         critical_count = sum(1 for v in vulnerabilities if v.get('severity') == 'critical')
         high_count = sum(1 for v in vulnerabilities if v.get('severity') == 'high')
         medium_count = sum(1 for v in vulnerabilities if v.get('severity') == 'medium')
         low_count = sum(1 for v in vulnerabilities if v.get('severity') in ['low', 'info'])
         
-        # 使用启发式算法计算基准分数
-        baseline_score = min(100, critical_count * 20 + high_count * 10 + medium_count * 3 + low_count * 1)
+        # 根据漏洞严重程度强制执行上限
+        enforced_score = result.risk_score
         
-        # 如果 LLM 的分数与基准分数差异过大，使用基准分数
-        diff = abs(result.risk_score - baseline_score)
+        if critical_count == 0:
+            # 没有严重漏洞
+            if high_count == 0:
+                # 没有高危漏洞
+                if medium_count == 0:
+                    # 只有低级/信息性漏洞，上限 15 分
+                    enforced_score = min(result.risk_score, 15)
+                else:
+                    # 有中等漏洞，上限 40 分
+                    enforced_score = min(result.risk_score, 40)
+            else:
+                # 有高危漏洞，上限 75 分
+                enforced_score = min(result.risk_score, 75)
+        # 如果有 critical，允许 80-100 分
         
-        if diff > 20:  # 差异超过 20 分则警告并调整
+        if enforced_score != result.risk_score:
             old_score = result.risk_score
-            result.risk_score = baseline_score
+            result.risk_score = enforced_score
             logger.warning(
-                f"Risk score adjusted from {old_score} to {baseline_score} (baseline). "
-                f"Vulnerabilities: {critical_count} critical, {high_count} high, {medium_count} medium, {low_count} low"
+                f"Risk score capped from {old_score} to {enforced_score}. "
+                f"Vulnerabilities: {critical_count} critical, {high_count} high, {medium_count} medium, {low_count} low/info"
             )
         
         return result
-    
+
     def _get_default_summary(
         self,
         target: str,
