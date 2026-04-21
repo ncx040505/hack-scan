@@ -43,8 +43,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // 初始化：从 localStorage 恢复 token 和 user
   useEffect(() => {
+    console.log('[AuthProvider] Initializing auth state from localStorage');
     const storedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
     const storedUser = localStorage.getItem(STORAGE_KEY_USER);
+
+    console.log('[AuthProvider] Found stored data:', {
+      hasToken: !!storedToken,
+      hasUser: !!storedUser
+    });
 
     if (storedToken && storedUser) {
       try {
@@ -52,13 +58,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const parsedUser = JSON.parse(storedUser);
         setToken(parsedToken);
         setUser(parsedUser);
+        console.log('[AuthProvider] Restored auth state:', {
+          userId: parsedUser.id,
+          username: parsedUser.username
+        });
       } catch (error) {
-        console.error('Failed to restore auth state:', error);
+        console.error('[AuthProvider] Failed to restore auth state:', error);
         localStorage.removeItem(STORAGE_KEY_TOKEN);
         localStorage.removeItem(STORAGE_KEY_USER);
       }
     }
 
+    console.log('[AuthProvider] Setting loading to false');
     setLoading(false);
   }, []);
 

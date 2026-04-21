@@ -18,23 +18,46 @@ api.interceptors.request.use(
       try {
         const parsed = JSON.parse(token)
         config.headers.Authorization = `Bearer ${parsed.access_token}`
+        console.log('[API] Request with token:', {
+          url: config.url,
+          method: config.method,
+          hasToken: !!parsed.access_token
+        })
       } catch (e) {
+        console.error('[API] Failed to parse token:', e)
         // Token parsing failed, ignore
       }
     }
     return config
   },
   (error) => {
+    console.error('[API] Request error:', error)
     return Promise.reject(error)
   }
 )
 
 // Add response interceptor to handle 401 errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[API] Response success:', {
+      url: response.config.url,
+      status: response.status,
+      dataKeys: Object.keys(response.data || {}).slice(0, 3)
+    })
+    return response
+  },
   (error) => {
+    console.error('[API] Response error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      data: error.response?.data
+    })
+    
     if (error.response?.status === 401) {
       // Clear auth and redirect to login
+      console.error('[API] 401 Unauthorized, clearing auth and redirecting')
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_user')
       window.location.href = '/auth'

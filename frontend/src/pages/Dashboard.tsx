@@ -237,13 +237,27 @@ export default function Dashboard() {
   const totalVulnerabilities = scans.reduce((sum, s) => sum + s.vulnerability_count, 0)
 
   if (isLoading) {
-    return <div className="text-center py-12">加载中...</div>
+    return (
+      <div className="text-center py-12">
+        <div className="text-lg font-semibold mb-2">加载中...</div>
+        <div className="text-sm text-gray-500">正在获取扫描数据，请稍候</div>
+      </div>
+    )
   }
 
   if (error) {
+    const errorMsg = error instanceof Error ? error.message : '未知错误'
+    console.error('[Dashboard] Error details:', { error, errorMsg })
     return (
-      <div className="text-center py-12 text-red-500">
-        加载失败: {(error as Error).message}
+      <div className="text-center py-12">
+        <div className="text-red-500 font-semibold mb-2">加载失败</div>
+        <div className="text-sm text-red-400 mb-4">错误: {errorMsg}</div>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          重新加载
+        </button>
       </div>
     )
   }
