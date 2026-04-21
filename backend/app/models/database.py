@@ -28,6 +28,12 @@ class SeverityLevel(str, Enum):
     INFO = "info"
 
 
+class UserRole(str, Enum):
+    """用户角色"""
+    USER = "user"           # 普通用户
+    ADMIN = "admin"         # 管理员
+
+
 class ToolType(str, Enum):
     SCRIPT = "script"           # Python/Bash 脚本
     NUCLEI_TEMPLATE = "nuclei"  # Nuclei 模板
@@ -37,11 +43,35 @@ class ToolType(str, Enum):
     SCANNER = "scanner"         # 自定义扫描器
 
 
+class User(Base):
+    """用户表"""
+    __tablename__ = "users"
+    
+    id = Column(String(36), primary_key=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    
+    role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
+    is_active = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # 关系
+    scan_tasks = relationship("ScanTask", back_populates="user")
+    llm_configs = relationship("LLMConfig", back_populates="user")
+    ai_personas = relationship("AIPersona", back_populates="user")
+    security_tools = relationship("SecurityTool", back_populates="user")
+
+
 class ScanTask(Base):
     """扫描任务表"""
     __tablename__ = "scan_tasks"
     
     id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     target = Column(String(500), nullable=False, index=True)
     scan_type = Column(String(50), nullable=False)  # full, quick, custom
     status = Column(SQLEnum(ScanStatus), default=ScanStatus.PENDING)
@@ -59,6 +89,7 @@ class ScanTask(Base):
     # 用户备注
     remark = Column(Text)  # 用户对扫描的备注
     
+    user = relationship("User", back_populates="scan_tasks")
     vulnerabilities = relationship("Vulnerability", back_populates="scan_task")
 
 
@@ -94,6 +125,7 @@ class SecurityTool(Base):
     __tablename__ = "security_tools"
     
     id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)  # NULL=系统级
     name = Column(String(200), nullable=False)
     description = Column(Text)
     tool_type = Column(SQLEnum(ToolType), nullable=False)
@@ -118,6 +150,8 @@ class SecurityTool(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    user = relationship("User", back_populates="security_tools")
 
 
 class SearchProvider(str, Enum):
@@ -134,6 +168,7 @@ class LLMConfig(Base):
     __tablename__ = "llm_configs"
     
     id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)  # NULL=系统级
     name = Column(String(100), nullable=False)  # 配置名称
     provider = Column(String(50), nullable=False)  # openai, azure, anthropic, ollama, etc.
     
@@ -159,6 +194,8 @@ class LLMConfig(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    user = relationship("User", back_populates="llm_configs")
 
 
 class SystemConfig(Base):
@@ -176,6 +213,7 @@ class AIPersona(Base):
     __tablename__ = "ai_personas"
     
     id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)  # NULL=系统级
     name = Column(String(100), nullable=False)  # 人格名称
     description = Column(Text)  # 人格描述
     system_prompt = Column(Text, nullable=False)  # System Prompt
@@ -185,6 +223,8 @@ class AIPersona(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    user = relationship("User", back_populates="ai_personas")
 
 
 class MessageRole(str, Enum):

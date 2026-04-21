@@ -1,37 +1,64 @@
 """Scan API endpoints"""
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, or_
 from loguru import logger
 
 from app.core.database import get_db, get_mongo_db, get_redis
 from app.core.scan_logger import get_scan_logger
 from app.core.vulnerability_fingerprint import severity_rank, vulnerability_fingerprint
-from app.models.database import ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, ScanChatMessage
+from app.core.rbac import check_scan_access, Permission, require_permission
+from app.models.database import (
+    ScanTask, Vulnerability, ScanStatus, SeverityLevel, ScanMessage, 
+    ScanChatMessage, User, UserRole
+)
 from app.schemas.scan import (
     ScanTaskCreate, ScanTaskResponse, ScanTaskList,
     VulnerabilityResponse, VulnerabilityList, ScanProgressResponse,
     ScanLogsResponse, ScanLogEntry
 )
+from app.api.auth import get_current_user
 from tasks.scan_tasks import execute_scan
 from tasks.celery_app import celery_app
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
 
+async def get_scan_task_with_access_check(
+    scan_id: str,
+    current_user: User,
+    db: AsyncSession
+) -> ScanTask:
+    """获取扫描任务并检查访问权限"""
+    result = await db.execute(
+        select(ScanTask).where(ScanTask.id == scan_id)
+    )
+    task = result.scalar_one_or_none()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Scan task not found")
+    
+    if not check_scan_access(current_user, task.user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return task
+
+
 @router.post("", response_model=ScanTaskResponse)
 async def create_scan(
     scan_req: ScanTaskCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """创建新的扫描任务"""
     task_id = str(uuid.uuid4())
     
-    # 创建数据库记录
+    # 创建数据库记录，关联当前用户
     scan_task = ScanTask(
         id=task_id,
+        user_id=current_user.id,
         target=scan_req.target,
         scan_type=scan_req.scan_type,
         status=ScanStatus.PENDING,
@@ -51,7 +78,7 @@ async def create_scan(
         config=scan_req.config.model_dump()
     )
     
-    logger.info(f"Scan task created: {task_id} for {scan_req.target}")
+    logger.info(f"Scan task created: {task_id} for {scan_req.target} by user {current_user.id}")
     
     return ScanTaskResponse(
         id=scan_task.id,
@@ -75,21 +102,32 @@ async def list_scans(
     limit: int = Query(20, ge=1, le=100),
     status: ScanStatus | None = None,
     search: str | None = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """获取扫描任务列表"""
-    query = select(ScanTask).order_by(ScanTask.created_at.desc())
+    """获取扫描任务列表（用户只能看自己的，管理员可以看所有）"""
+    filters = []
+    
+    # 权限检查：普通用户只能看自己的，管理员可以看所有
+    if current_user.role != UserRole.ADMIN:
+        filters.append(ScanTask.user_id == current_user.id)
     
     if status:
-        query = query.where(ScanTask.status == status)
+        filters.append(ScanTask.status == status)
     
     # 支持模糊搜索：搜索目标和备注
     if search:
         search_pattern = f"%{search}%"
-        query = query.where(
-            (ScanTask.target.ilike(search_pattern)) |
-            (ScanTask.remark.ilike(search_pattern))
+        filters.append(
+            or_(
+                ScanTask.target.ilike(search_pattern),
+                ScanTask.remark.ilike(search_pattern)
+            )
         )
+    
+    query = select(ScanTask).order_by(ScanTask.created_at.desc())
+    if filters:
+        query = query.where(and_(*filters))
     
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
@@ -97,14 +135,8 @@ async def list_scans(
     
     # 获取总数
     count_query = select(func.count(ScanTask.id))
-    if status:
-        count_query = count_query.where(ScanTask.status == status)
-    if search:
-        search_pattern = f"%{search}%"
-        count_query = count_query.where(
-            (ScanTask.target.ilike(search_pattern)) |
-            (ScanTask.remark.ilike(search_pattern))
-        )
+    if filters:
+        count_query = count_query.where(and_(*filters))
     total = (await db.execute(count_query)).scalar()
     
     # 获取漏洞数量
@@ -136,16 +168,11 @@ async def list_scans(
 @router.get("/{scan_id}", response_model=ScanTaskResponse)
 async def get_scan(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务详情"""
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 获取漏洞数量
     vuln_count_query = select(func.count(Vulnerability.id)).where(
@@ -172,19 +199,11 @@ async def get_scan(
 @router.get("/{scan_id}/progress", response_model=ScanProgressResponse)
 async def get_scan_progress(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务进度（从 Celery 任务状态）"""
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
-    
-    phase = None
-    message = None
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 从 Celery 获取任务状态
     if task.status == ScanStatus.RUNNING:

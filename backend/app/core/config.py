@@ -27,9 +27,15 @@ class Settings(BaseSettings):
     scan_temp_dir: str = "/tmp/shelling_scans"  # 扫描结果临时目录
     tools_dir: str = "/app/data/tools"  # 知识库存储目录
     
-    # Security
+    # Security & Authentication
     secret_key: str = "change-me-in-production"
     allowed_origins: list[str] = ["http://localhost:3000", "http://0.0.0.0:3000", "*"]
+    
+    # JWT Configuration
+    jwt_secret_key: str = "your-super-secret-jwt-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30  # 30 minutes
+    jwt_refresh_token_expire_days: int = 7  # 7 days
     
     class Config:
         env_file = ".env"

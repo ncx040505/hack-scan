@@ -6,7 +6,7 @@ from loguru import logger
 
 from app.core.config import get_settings
 from app.core.database import init_databases, close_databases
-from app.api import scans, system, tools, settings as settings_api
+from app.api import scans, system, tools, settings as settings_api, auth, admin
 
 settings = get_settings()
 
@@ -42,6 +42,8 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(admin.router, prefix=settings.api_prefix)
 app.include_router(system.router, prefix=settings.api_prefix)
 app.include_router(scans.router, prefix=settings.api_prefix)
 app.include_router(tools.router, prefix=settings.api_prefix)
