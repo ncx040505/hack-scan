@@ -114,6 +114,32 @@ async def init_databases():
     from app.models.database import Base
     async with pg_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Create default admin user if it doesn't exist
+    from app.models.database import User, UserRole
+    from app.core.security import get_password_manager
+    from sqlalchemy import select
+    
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(User).where(User.role == UserRole.ADMIN)
+        )
+        
+        if not result.scalars().first():
+            import uuid
+            password_manager = get_password_manager()
+            admin = User(
+                id=str(uuid.uuid4()),
+                username="admin",
+                email="admin@shelling.local",
+                password_hash=password_manager.hash_password("admin123456"),
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            session.add(admin)
+            await session.commit()
+            from loguru import logger
+            logger.info("Created default admin user: admin/admin123456")
 
 
 async def close_databases():

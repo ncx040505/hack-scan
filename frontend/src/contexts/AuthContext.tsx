@@ -64,24 +64,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (username: string, password: string) => {
     try {
+      console.log('[Auth] Logging in user:', username);
+      console.log('[Auth] API_BASE:', API_BASE);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
+        console.error('[Auth] Login failed:', error);
+        throw new Error(error.detail || '登录失败');
       }
 
       const data = await response.json();
+      console.log('[Auth] Login successful');
+      
       setUser(data.user);
       setToken(data.token);
 
       localStorage.setItem(STORAGE_KEY_TOKEN, JSON.stringify(data.token));
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
     } catch (error) {
+      console.error('[Auth] Login error:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('登录请求超时，请检查网络连接');
+      }
       throw error;
     }
   };
@@ -93,29 +109,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     password_confirm: string
   ) => {
     try {
+      console.log('[Auth] Registering user:', username);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, password_confirm }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Registration failed');
+        console.error('[Auth] Register failed:', error);
+        throw new Error(error.detail || '注册失败');
       }
 
       const data = await response.json();
+      console.log('[Auth] Register successful');
+      
       setUser(data.user);
       setToken(data.token);
 
       localStorage.setItem(STORAGE_KEY_TOKEN, JSON.stringify(data.token));
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
     } catch (error) {
+      console.error('[Auth] Register error:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('注册请求超时，请检查网络连接');
+      }
       throw error;
     }
   };
 
   const logout = () => {
+    console.log('[Auth] Logging out');
     setUser(null);
     setToken(null);
     localStorage.removeItem(STORAGE_KEY_TOKEN);
@@ -123,9 +155,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateProfile = async (email?: string, username?: string, password?: string) => {
-    if (!token) throw new Error('Not authenticated');
+    if (!token) throw new Error('未认证');
 
     try {
+      console.log('[Auth] Updating profile');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(`${API_BASE}/auth/profile`, {
         method: 'PATCH',
         headers: {
@@ -133,17 +170,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           'Authorization': `Bearer ${token.access_token}`,
         },
         body: JSON.stringify({ email, username, password }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Update failed');
+        console.error('[Auth] Update failed:', error);
+        throw new Error(error.detail || '更新失败');
       }
 
       const updatedUser = await response.json();
+      console.log('[Auth] Profile updated');
+      
       setUser(updatedUser);
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
     } catch (error) {
+      console.error('[Auth] Update error:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('更新请求超时');
+      }
       throw error;
     }
   };
