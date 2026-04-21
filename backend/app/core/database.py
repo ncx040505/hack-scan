@@ -119,27 +119,34 @@ async def init_databases():
     from app.models.database import User, UserRole
     from app.core.security import get_password_manager
     from sqlalchemy import select
+    from loguru import logger
     
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(User).where(User.role == UserRole.ADMIN)
-        )
-        
-        if not result.scalars().first():
-            import uuid
-            password_manager = get_password_manager()
-            admin = User(
-                id=str(uuid.uuid4()),
-                username="admin",
-                email="admin@shelling.local",
-                password_hash=password_manager.hash_password("admin123456"),
-                role=UserRole.ADMIN,
-                is_active=True
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.role == UserRole.ADMIN)
             )
-            session.add(admin)
-            await session.commit()
-            from loguru import logger
-            logger.info("Created default admin user: admin/admin123456")
+            
+            if not result.scalars().first():
+                import uuid
+                password_manager = get_password_manager()
+                admin = User(
+                    id=str(uuid.uuid4()),
+                    username="admin",
+                    email="admin@shelling.local",
+                    password_hash=password_manager.hash_password("admin123456"),
+                    role=UserRole.ADMIN,
+                    is_active=True
+                )
+                session.add(admin)
+                await session.commit()
+                logger.info("✅ Created default admin user: admin/admin123456")
+            else:
+                logger.info("✅ Admin user already exists")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to create/verify admin user: {e}")
+    
+    logger.info("✅ Database initialization complete")
 
 
 async def close_databases():

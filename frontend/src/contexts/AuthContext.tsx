@@ -68,7 +68,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] API_BASE:', API_BASE);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      // 增加到30秒超时以适应首次启动时数据库初始化的延迟
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
@@ -96,7 +97,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error('[Auth] Login error:', error);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('登录请求超时，请检查网络连接');
+        throw new Error('登录请求超时，请确保后端服务已启动');
       }
       throw error;
     }
@@ -112,7 +113,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] Registering user:', username);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // 30秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
@@ -140,7 +142,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error('[Auth] Register error:', error);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('注册请求超时，请检查网络连接');
+        throw new Error('注册请求超时，请确保后端服务已启动');
       }
       throw error;
     }
@@ -161,7 +163,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] Updating profile');
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // 30秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(`${API_BASE}/auth/profile`, {
         method: 'PATCH',
@@ -189,7 +192,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error('[Auth] Update error:', error);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('更新请求超时');
+        throw new Error('更新请求超时，请确保后端服务已启动');
       }
       throw error;
     }
