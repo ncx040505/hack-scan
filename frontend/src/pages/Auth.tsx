@@ -33,7 +33,7 @@ export const Auth: React.FC = () => {
     try {
       if (isRegister) {
         if (formData.password !== formData.password_confirm) {
-          throw new Error('Passwords do not match');
+          throw new Error('密码不匹配');
         }
         await register(
           formData.username,
@@ -46,7 +46,7 @@ export const Auth: React.FC = () => {
       }
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : '发生错误');
     } finally {
       setIsLoading(false);
     }
@@ -60,25 +60,25 @@ export const Auth: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1>{isRegister ? 'Register' : 'Login'}</h1>
+        <h1>{isRegister ? '注册' : '登录'}</h1>
         <p className="auth-subtitle">
           {isRegister
-            ? 'Create a new account to get started'
-            : 'Sign in to your account'}
+            ? '创建一个新账户开始使用'
+            : '登录到您的账户'}
         </p>
 
         {error && <div className="auth-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">用户名</label>
             <input
               id="username"
               type="text"
               name="username"
               value={formData.username}
               onChange={handleChange}
-              placeholder="Enter your username"
+              placeholder="输入用户名"
               required
               minLength={3}
             />
@@ -86,28 +86,28 @@ export const Auth: React.FC = () => {
 
           {isRegister && (
             <div className="form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">邮箱</label>
               <input
                 id="email"
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="Enter your email"
+                placeholder="输入邮箱地址"
                 required
               />
             </div>
           )}
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">密码</label>
             <input
               id="password"
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your password"
+              placeholder="输入密码"
               required
               minLength={8}
             />
@@ -115,14 +115,14 @@ export const Auth: React.FC = () => {
 
           {isRegister && (
             <div className="form-group">
-              <label htmlFor="password_confirm">Confirm Password</label>
+              <label htmlFor="password_confirm">确认密码</label>
               <input
                 id="password_confirm"
                 type="password"
                 name="password_confirm"
                 value={formData.password_confirm}
                 onChange={handleChange}
-                placeholder="Confirm your password"
+                placeholder="再次输入密码"
                 required
                 minLength={8}
               />
@@ -131,21 +131,22 @@ export const Auth: React.FC = () => {
 
           <button type="submit" disabled={isLoading} className="auth-submit">
             {isLoading
-              ? 'Loading...'
+              ? '加载中...'
               : isRegister
-              ? 'Register'
-              : 'Login'}
+              ? '注册'
+              : '登录'}
           </button>
         </form>
 
         <p className="auth-toggle">
-          {isRegister ? 'Already have an account?' : 'Don\'t have an account?'}
+          {isRegister ? '已有账户?' : '没有账户?'}
           {' '}
           <button type="button" onClick={toggleMode} className="toggle-link">
-            {isRegister ? 'Login' : 'Register'}
+            {isRegister ? '登录' : '注册'}
           </button>
         </p>
       </div>
     </div>
   );
 };
+

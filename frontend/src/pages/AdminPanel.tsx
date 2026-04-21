@@ -22,7 +22,7 @@ export const AdminPanel: React.FC = () => {
   const [editForm, setEditForm] = useState<Partial<User>>({});
 
   if (!isAdmin) {
-    return <div className="admin-panel-error">Access denied. Admin only.</div>;
+    return <div className="admin-panel-error">访问被拒绝。仅限管理员。</div>;
   }
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export const AdminPanel: React.FC = () => {
       setUsers(response.data.items);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users');
+      setError(err instanceof Error ? err.message : '加载用户失败');
     } finally {
       setLoading(false);
     }
@@ -55,18 +55,18 @@ export const AdminPanel: React.FC = () => {
       setEditingId(null);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update user');
+      setError(err instanceof Error ? err.message : '更新用户失败');
     }
   };
 
   const handleDelete = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    if (!window.confirm('确定要删除此用户吗?')) return;
 
     try {
       await api.delete(`/admin/users/${userId}`);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete user');
+      setError(err instanceof Error ? err.message : '删除用户失败');
     }
   };
 
@@ -77,29 +77,29 @@ export const AdminPanel: React.FC = () => {
       });
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle user status');
+      setError(err instanceof Error ? err.message : '更新用户状态失败');
     }
   };
 
   return (
     <div className="admin-panel">
-      <h1>User Management</h1>
+      <h1>用户管理</h1>
 
       {error && <div className="admin-error">{error}</div>}
 
       {loading ? (
-        <div className="admin-loading">Loading...</div>
+        <div className="admin-loading">加载中...</div>
       ) : (
         <div className="users-table-container">
           <table className="users-table">
             <thead>
               <tr>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Last Login</th>
-                <th>Actions</th>
+                <th>用户名</th>
+                <th>邮箱</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>最后登录</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -142,12 +142,12 @@ export const AdminPanel: React.FC = () => {
                           })
                         }
                       >
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
+                        <option value="user">普通用户</option>
+                        <option value="admin">管理员</option>
                       </select>
                     ) : (
                       <span className={`role-badge role-${user.role}`}>
-                        {user.role}
+                        {user.role === 'admin' ? '管理员' : '普通用户'}
                       </span>
                     )}
                   </td>
@@ -158,13 +158,13 @@ export const AdminPanel: React.FC = () => {
                       }`}
                       onClick={() => handleToggleActive(user)}
                     >
-                      {user.is_active ? 'Active' : 'Inactive'}
+                      {user.is_active ? '活跃' : '禁用'}
                     </button>
                   </td>
                   <td>
                     {user.last_login_at
-                      ? new Date(user.last_login_at).toLocaleDateString()
-                      : 'Never'}
+                      ? new Date(user.last_login_at).toLocaleDateString('zh-CN')
+                      : '从未'}
                   </td>
                   <td className="actions-cell">
                     {editingId === user.id ? (
@@ -173,13 +173,13 @@ export const AdminPanel: React.FC = () => {
                           className="btn-save"
                           onClick={handleSaveEdit}
                         >
-                          Save
+                          保存
                         </button>
                         <button
                           className="btn-cancel"
                           onClick={() => setEditingId(null)}
                         >
-                          Cancel
+                          取消
                         </button>
                       </>
                     ) : (
@@ -188,13 +188,13 @@ export const AdminPanel: React.FC = () => {
                           className="btn-edit"
                           onClick={() => handleEdit(user)}
                         >
-                          Edit
+                          编辑
                         </button>
                         <button
                           className="btn-delete"
                           onClick={() => handleDelete(user.id)}
                         >
-                          Delete
+                          删除
                         </button>
                       </>
                     )}
@@ -208,15 +208,15 @@ export const AdminPanel: React.FC = () => {
 
       <div className="admin-stats">
         <div className="stat">
-          <label>Total Users</label>
+          <label>用户总数</label>
           <span>{users.length}</span>
         </div>
         <div className="stat">
-          <label>Admins</label>
+          <label>管理员</label>
           <span>{users.filter((u) => u.role === 'admin').length}</span>
         </div>
         <div className="stat">
-          <label>Active</label>
+          <label>活跃用户</label>
           <span>{users.filter((u) => u.is_active).length}</span>
         </div>
       </div>
