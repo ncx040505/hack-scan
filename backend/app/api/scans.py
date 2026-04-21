@@ -242,17 +242,11 @@ async def get_scan_progress(
 async def get_scan_logs(
     scan_id: str,
     since_index: int = Query(0, ge=0, description="获取此索引之后的日志"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务的实时日志"""
-    # 验证任务存在
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 从 Redis 获取日志
     scan_logger = get_scan_logger(scan_id)
@@ -274,15 +268,11 @@ async def get_scan_vulnerabilities(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     severity: SeverityLevel | None = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务的漏洞列表"""
-    # 验证任务存在
-    task_result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    if not task_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     query = select(Vulnerability).where(
         Vulnerability.scan_task_id == scan_id
@@ -330,19 +320,13 @@ async def get_scan_vulnerabilities(
 async def get_attack_path(
     scan_id: str,
     refresh: bool = Query(False, description="强制重新生成攻击路径分析"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务的攻击路径分析"""
     from llm.analyzer import get_analyzer
     
-    # 获取扫描任务
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 如果已有缓存且不需要刷新，直接返回
     if task.attack_path_analysis and not refresh:
@@ -429,16 +413,11 @@ async def get_attack_path(
 @router.post("/{scan_id}/cancel")
 async def cancel_scan(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """取消扫描任务"""
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     if task.status not in (ScanStatus.PENDING, ScanStatus.RUNNING, ScanStatus.PAUSED):
         raise HTTPException(
@@ -469,16 +448,11 @@ async def cancel_scan(
 @router.delete("/{scan_id}")
 async def delete_scan(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """删除扫描任务"""
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     if task.status in (ScanStatus.PENDING, ScanStatus.RUNNING):
         raise HTTPException(
@@ -518,7 +492,8 @@ async def delete_scan(
 @router.post("/batch-delete")
 async def batch_delete_scans(
     scan_ids: list[str] = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """批量删除扫描任务"""
     if not scan_ids:
@@ -538,6 +513,12 @@ async def batch_delete_scans(
             if not task:
                 failed_count += 1
                 failed_ids.append({"id": scan_id, "reason": "任务不存在"})
+                continue
+            
+            # 检查权限
+            if not check_scan_access(current_user, task.user_id):
+                failed_count += 1
+                failed_ids.append({"id": scan_id, "reason": "无权删除该任务"})
                 continue
             
             if task.status in (ScanStatus.PENDING, ScanStatus.RUNNING):
@@ -596,17 +577,11 @@ from tasks.scan_tasks import resume_scan
 @router.get("/{scan_id}/messages", response_model=ScanMessageList)
 async def get_scan_messages(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描任务的对话消息"""
-    # 验证任务存在
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 获取消息列表
     result = await db.execute(
@@ -645,17 +620,11 @@ async def get_scan_messages(
 async def send_scan_message(
     scan_id: str,
     message: ScanMessageCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """发送用户消息并恢复扫描"""
-    # 验证任务存在且处于暂停状态
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     if task.status != ScanStatus.PAUSED:
         raise HTTPException(
@@ -707,17 +676,11 @@ from llm.analyzer import get_analyzer
 @router.get("/{scan_id}/chat", response_model=ChatHistory)
 async def get_chat_history(
     scan_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """获取扫描完成后的对话历史"""
-    # 验证任务存在
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 获取对话历史
     result = await db.execute(
@@ -750,17 +713,11 @@ async def get_chat_history(
 async def chat_about_scan(
     scan_id: str,
     request: ChatRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """对扫描结果进行对话分析"""
-    # 验证任务存在
-    result = await db.execute(
-        select(ScanTask).where(ScanTask.id == scan_id)
-    )
-    task = result.scalar_one_or_none()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Scan task not found")
+    task = await get_scan_task_with_access_check(scan_id, current_user, db)
     
     # 只有完成/失败/取消的扫描才能继续对话
     if task.status not in [ScanStatus.COMPLETED, ScanStatus.FAILED, ScanStatus.CANCELLED]:

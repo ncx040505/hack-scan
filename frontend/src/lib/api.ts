@@ -10,6 +10,39 @@ export const api = axios.create({
   },
 })
 
+// Add request interceptor to include auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      try {
+        const parsed = JSON.parse(token)
+        config.headers.Authorization = `Bearer ${parsed.access_token}`
+      } catch (e) {
+        // Token parsing failed, ignore
+      }
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Add response interceptor to handle 401 errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear auth and redirect to login
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_user')
+      window.location.href = '/auth'
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Types
 export interface ScanConfig {
   enable_port_scan: boolean
