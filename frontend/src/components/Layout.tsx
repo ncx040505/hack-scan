@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Shield, LayoutDashboard, Plus, Database, Sun, Moon, Monitor, Bot, Settings, List, Menu, X } from 'lucide-react'
+import { Shield, LayoutDashboard, Plus, Database, Sun, Moon, Monitor, Bot, Settings, List, Menu, X, LogOut, User } from 'lucide-react'
 import clsx from 'clsx'
 import { useTheme } from '../contexts/ThemeContext'
+import { useAuth } from '../contexts/AuthContext'
 
 const navItems = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard },
@@ -14,7 +15,9 @@ const navItems = [
 export default function Layout() {
   const location = useLocation()
   const { theme, setTheme } = useTheme()
+  const { user, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
@@ -241,7 +244,42 @@ export default function Layout() {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 p-4 sm:p-6 overflow-auto">
+        <main className="flex-1 flex flex-col p-4 sm:p-6 overflow-auto">
+          {/* Top bar with user info */}
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div></div>
+            {user && (
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">欢迎</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</p>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title="用户菜单"
+                  >
+                    <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  </button>
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                      <button
+                        onClick={() => {
+                          logout()
+                          setUserMenuOpen(false)
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        退出登录
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <Outlet />
         </main>
       </div>
