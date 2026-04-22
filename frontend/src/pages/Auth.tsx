@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Shield } from 'lucide-react';
 import '../styles/Auth.css';
 
 export const Auth: React.FC = () => {
@@ -59,92 +60,114 @@ export const Auth: React.FC = () => {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
-        <h1>{isRegister ? '注册' : '登录'}</h1>
-        <p className="auth-subtitle">
-          {isRegister
-            ? '创建一个新账户开始使用'
-            : '登录到您的账户'}
-        </p>
-
-        {error && <div className="auth-error">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="username">用户名</label>
-            <input
-              id="username"
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="输入用户名"
-              required
-              minLength={3}
-            />
+      {/* Left side - Brand info */}
+      <div className="auth-brand">
+        <div className="brand-content">
+          <div className="brand-logo">
+            <Shield className="w-16 h-16" />
           </div>
+          <h1 className="brand-title">Shelling</h1>
+          <p className="brand-description">
+            {isRegister 
+              ? '加入 Shelling，开始进行安全扫描和漏洞分析'
+              : '使用 Shelling 进行专业的安全扫描和漏洞评估'}
+          </p>
+        </div>
+      </div>
 
-          {isRegister && (
+      {/* Right side - Form */}
+      <div className="auth-form-container">
+        <div className="auth-card">
+          <h2>{isRegister ? '注册' : '登录'}</h2>
+
+          {error && <div className="auth-error">{error}</div>}
+
+          <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="email">邮箱</label>
               <input
-                id="email"
-                type="email"
-                name="email"
-                value={formData.email}
+                id="username"
+                type="text"
+                name="username"
+                value={formData.username}
                 onChange={handleChange}
-                placeholder="输入邮箱地址"
+                placeholder={isRegister ? "创建用户名" : "用户名或邮箱"}
                 required
+                minLength={3}
               />
             </div>
-          )}
 
-          <div className="form-group">
-            <label htmlFor="password">密码</label>
-            <input
-              id="password"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="输入密码"
-              required
-              minLength={8}
-            />
-          </div>
+            {isRegister && (
+              <div className="form-group">
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="邮箱地址"
+                  required
+                />
+              </div>
+            )}
 
-          {isRegister && (
             <div className="form-group">
-              <label htmlFor="password_confirm">确认密码</label>
               <input
-                id="password_confirm"
+                id="password"
                 type="password"
-                name="password_confirm"
-                value={formData.password_confirm}
+                name="password"
+                value={formData.password}
                 onChange={handleChange}
-                placeholder="再次输入密码"
+                placeholder="密码"
                 required
                 minLength={8}
               />
             </div>
+
+            {isRegister && (
+              <div className="form-group">
+                <input
+                  id="password_confirm"
+                  type="password"
+                  name="password_confirm"
+                  value={formData.password_confirm}
+                  onChange={handleChange}
+                  placeholder="确认密码"
+                  required
+                  minLength={8}
+                />
+              </div>
+            )}
+
+            <button type="submit" disabled={isLoading} className="auth-submit">
+              {isLoading
+                ? '加载中...'
+                : isRegister
+                ? '注册'
+                : '登录'}
+            </button>
+          </form>
+
+          {!isRegister && (
+            <div className="auth-forgot">
+              <a href="#forgot" onClick={(e) => {
+                e.preventDefault();
+                alert('请联系管理员重置密码');
+              }}>
+                忘记密码？
+              </a>
+            </div>
           )}
 
-          <button type="submit" disabled={isLoading} className="auth-submit">
-            {isLoading
-              ? '加载中...'
-              : isRegister
-              ? '注册'
-              : '登录'}
-          </button>
-        </form>
+          <div className="auth-divider"></div>
 
-        <p className="auth-toggle">
-          {isRegister ? '已有账户?' : '没有账户?'}
-          {' '}
-          <button type="button" onClick={toggleMode} className="toggle-link">
-            {isRegister ? '登录' : '注册'}
+          <button 
+            type="button" 
+            onClick={toggleMode} 
+            className={`auth-toggle-btn ${isRegister ? 'login-btn' : 'register-btn'}`}
+          >
+            {isRegister ? '已有账户？登录' : '创建新账户'}
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );
