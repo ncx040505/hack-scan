@@ -33,14 +33,14 @@
 .brand-logo svg {
   width: 60px;
   height: 60px;
-  color: white;
+  color: #2563eb;
 }
 
 .brand-title {
   font-size: 52px;
   font-weight: 800;
   margin: 0;
-  color: white;
+  color: #2563eb;
   letter-spacing: -2px;
 }
 
@@ -48,7 +48,7 @@
   font-size: 24px;
   font-weight: 500;
   margin: 0;
-  color: rgba(255, 255, 255, 0.9);
+  color: #1e293b;
   line-height: 1.4;
 }
 
@@ -207,7 +207,7 @@
 /* Desktop layout */
 @media (min-width: 1024px) {
   .auth-container {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    background: #f0f9ff;
     padding: 40px;
   }
 
