@@ -763,9 +763,11 @@ async def chat_about_scan(
         role = "用户" if msg.role == ChatRole.USER else "助手"
         chat_history.append(f"{role}: {msg.content}")
     
-    # 获取活跃的 LLM 配置
+    # 获取活跃的 LLM 配置（创建新会话避免事务冲突）
     from app.api.settings import get_active_llm_config
-    db_config = await get_active_llm_config(db)
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as config_db:
+        db_config = await get_active_llm_config(config_db)
     
     if not db_config:
         raise HTTPException(status_code=503, detail="LLM 配置未设置，请在设置中配置 LLM")
