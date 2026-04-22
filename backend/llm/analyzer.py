@@ -133,12 +133,10 @@ class VulnAnalyzer:
         
         from app.api.settings import get_active_llm_config
         
-        # 获取活跃的 LLM 配置
-        if self.db:
-            db_config = await get_active_llm_config(self.db)
-        else:
-            async with self.session_factory() as db:
-                db_config = await get_active_llm_config(db)
+        # 始终创建新的会话以避免异步操作冲突
+        # 不要使用传入的 self.db，因为它可能在其他事务中
+        async with self.session_factory() as db:
+            db_config = await get_active_llm_config(db)
         
         if not db_config:
             logger.warning("No active LLM config found in database, LLM analysis will be disabled")
