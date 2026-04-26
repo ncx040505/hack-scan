@@ -153,7 +153,7 @@ export default function Layout() {
       <div className="flex min-h-[calc(100vh-3.5rem)] md:min-h-screen">
         {/* Sidebar */}
         <aside className="hidden md:flex md:w-64 md:flex-col md:bg-white md:dark:bg-gray-800 md:border-r md:border-gray-200 md:dark:border-gray-700 md:sticky md:top-0 md:h-screen">
-        <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
+        <div className="px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Shield className="w-8 h-8 text-blue-500 flex-shrink-0" />
             <span className="text-xl font-bold truncate">Shelling</span>
@@ -246,14 +246,11 @@ export default function Layout() {
         {/* Main content */}
         <main className="flex-1 flex flex-col overflow-auto">
           {/* Top bar with user info */}
-          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
             <div></div>
             {user && (
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">欢迎</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</p>
-                </div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400">欢迎 <span className="font-medium text-gray-900 dark:text-white">{user.username}</span></p>
                 <div className="relative">
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
