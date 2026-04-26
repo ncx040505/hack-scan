@@ -244,9 +244,9 @@ export default function Layout() {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col p-4 sm:p-6 overflow-auto">
+        <main className="flex-1 flex flex-col overflow-auto">
           {/* Top bar with user info */}
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div></div>
             {user && (
               <div className="flex items-center gap-4">
@@ -280,7 +280,9 @@ export default function Layout() {
               </div>
             )}
           </div>
-          <Outlet />
+          <div className="flex-1 p-4 sm:p-6 overflow-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
