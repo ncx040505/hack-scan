@@ -41,7 +41,6 @@ flowchart TD
 ## 快速开始（Docker Compose）
 
 ```bash
-cd docker
 docker compose up --build -d
 ```
 
@@ -53,8 +52,7 @@ docker compose up --build -d
 
 1. 启动依赖服务
 ```bash
-cd docker
-docker-compose up -d postgres mongodb redis
+docker compose up -d postgres mongodb redis
 ```
 
 2. 启动后端

@@ -2,6 +2,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
+    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -22,6 +23,7 @@ services:
   # MongoDB
   mongodb:
     image: mongo:7
+    restart: always
     command: ["mongod", "--bind_ip_all"]
     ports:
       - "27017:27017"
@@ -29,12 +31,20 @@ services:
       - mongodb_data:/data/db
     networks:
       - scanner_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # Redis
   redis:
     image: redis:7-alpine
+    restart: always
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - scanner_network
     healthcheck:
@@ -46,8 +56,9 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: ../backend
+      context: ./backend
       dockerfile: ../docker/Dockerfile.backend
+    restart: always
     ports:
       - "8000:8000"
     environment:
@@ -61,11 +72,11 @@ services:
       redis:
         condition: service_healthy
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kali_scanner:
         condition: service_healthy
     volumes:
-      - ../backend:/app
+      - ./backend:/app
       - tools_data:/app/data/tools
     networks:
       - scanner_network
@@ -76,8 +87,9 @@ services:
   # Celery Worker
   celery_worker:
     build:
-      context: ../backend
+      context: ./backend
       dockerfile: ../docker/Dockerfile.backend
+    restart: always
     environment:
       - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
       - MONGODB_URL=mongodb://mongodb:27017
@@ -89,7 +101,7 @@ services:
       - mongodb
       - kali_scanner
     volumes:
-      - ../backend:/app
+      - ./backend:/app
       - tools_data:/app/data/tools
     networks:
       - scanner_network
@@ -98,19 +110,20 @@ services:
   # Kali Scanner Container
   kali_scanner:
     build:
-      context: .
+      context: ./docker
       dockerfile: Dockerfile.kali
+    restart: always
     ports:
       - "8888:8888"
     volumes:
       - kali_tools:/scanner/tools
       - kali_output:/scanner/output
       - kali_logs:/scanner/logs
-      - kali_tmp:/scanner/tmp        # 扫描缓存目录
-      - tools_data:/app/data/tools   # 共享用户上传的工具
+      - kali_tmp:/scanner/tmp
+      - tools_data:/app/data/tools
     networks:
       - scanner_network
-    privileged: true  # 某些扫描工具需要特权模式（如 masscan）
+    privileged: true
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -120,22 +133,23 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    restart: unless-stopped
 
   # Frontend (development)
   frontend:
     build:
-      context: ../frontend
+      context: ./frontend
       dockerfile: ../docker/Dockerfile.frontend
+    restart: always
     ports:
       - "3000:3000"
     volumes:
-      - ../frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     environment:
       - VITE_API_URL=/api/v1
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     networks:
       - scanner_network
     command: sh -c "npm install && npm run dev -- --host"
@@ -147,8 +161,9 @@ networks:
 volumes:
   postgres_data:
   mongodb_data:
+  redis_data:
   tools_data:
   kali_tools:
   kali_output:
   kali_logs:
-  kali_tmp:              # 扫描缓存 volume
+  kali_tmp:
