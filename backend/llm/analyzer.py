@@ -136,7 +136,7 @@ class VulnAnalyzer:
         # 始终创建新的会话以避免异步操作冲突
         # 不要使用传入的 self.db，因为它可能在其他事务中
         async with self.session_factory() as db:
-            db_config = await get_active_llm_config(db)
+            db_config = await get_active_llm_config(db, role="sub")
         
         if not db_config:
             logger.warning("No active LLM config found in database, LLM analysis will be disabled")
@@ -153,7 +153,7 @@ class VulnAnalyzer:
                 max_tokens=db_config.max_tokens,
             )
             self.llm_available = True
-            logger.info(f"LLM initialized with config: {db_config.name}")
+            logger.info(f"Sub-agent analyzer LLM initialized with config: {db_config.name}")
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
             self.llm = None

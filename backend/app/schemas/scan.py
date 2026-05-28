@@ -22,6 +22,7 @@ class ScanConfig(BaseModel):
     
     # AI Agent 配置
     enable_ai_agent: bool = True
+    enable_sub_agents: bool = Field(default=True, description="启用 SubAgent 任务编排")
     ai_max_iterations: int = Field(default=0, ge=0, description="AI Agent 最大迭代次数，0 表示无限制")
     ai_custom_prompt: str | None = Field(default=None, description="AI Agent 自定义提示词")
     ai_persona_id: str | None = Field(default=None, description="AI 人格 ID，为空则使用默认人格")
@@ -40,6 +41,22 @@ class ScanTaskCreate(BaseModel):
     remark: str | None = Field(default=None, description="扫描备注")
 
 
+class SubAgentTaskResponse(BaseModel):
+    """SubAgent 编排状态"""
+    id: str
+    name: str
+    role: str
+    objective: str
+    status: str
+    phase: str | None = None
+    progress: int = 0
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    summary: str | None = None
+    findings_count: int = 0
+    error: str | None = None
+
+
 class ScanTaskResponse(BaseModel):
     """扫描任务响应"""
     id: str
@@ -54,6 +71,7 @@ class ScanTaskResponse(BaseModel):
     llm_risk_score: int | None
     vulnerability_count: int = 0
     remark: str | None = None
+    sub_agents: list[SubAgentTaskResponse] = []
     
     class Config:
         from_attributes = True
@@ -71,6 +89,7 @@ class ScanProgressResponse(BaseModel):
     status: ScanStatus
     phase: str | None = None
     message: str | None = None
+    sub_agents: list[SubAgentTaskResponse] = []
 
 
 class ScanLogEntry(BaseModel):
@@ -196,7 +215,8 @@ class LLMConfigCreate(BaseModel):
     model: str = Field(..., max_length=100)
     temperature: int = Field(default=10, ge=0, le=200)  # 实际值 * 100
     max_tokens: int = Field(default=4096, ge=1, le=128000)
-    is_active: bool = False
+    active_for_main_agent: bool = False
+    active_for_sub_agent: bool = False
     priority: int = Field(default=0, ge=0)
 
 
@@ -209,7 +229,8 @@ class LLMConfigUpdate(BaseModel):
     model: str | None = None
     temperature: int | None = None
     max_tokens: int | None = None
-    is_active: bool | None = None
+    active_for_main_agent: bool | None = None
+    active_for_sub_agent: bool | None = None
     is_enabled: bool | None = None
     priority: int | None = None
 
@@ -224,7 +245,8 @@ class LLMConfigResponse(BaseModel):
     model: str
     temperature: int
     max_tokens: int
-    is_active: bool
+    active_for_main_agent: bool
+    active_for_sub_agent: bool
     is_enabled: bool
     priority: int
     total_requests: int

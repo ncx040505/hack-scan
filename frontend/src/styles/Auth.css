@@ -1,11 +1,32 @@
 .auth-container {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: #f0f2f5;
+  background:
+    linear-gradient(90deg, rgba(247, 252, 255, 0.32) 0%, rgba(247, 252, 255, 0.12) 50%, rgba(220, 239, 255, 0.28) 100%),
+    url('../assets/auth-background.png') center / cover no-repeat,
+    #eff8ff;
   padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+}
+
+.auth-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 22% 24%, rgba(255, 255, 255, 0.64), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(215, 235, 250, 0.14));
+  pointer-events: none;
+}
+
+.auth-brand,
+.auth-form-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* Left side - Brand */
@@ -207,7 +228,6 @@
 /* Desktop layout */
 @media (min-width: 1024px) {
   .auth-container {
-    background: #f0f9ff;
     padding: 40px;
   }
 
@@ -228,6 +248,10 @@
 @media (max-width: 1023px) {
   .auth-container {
     flex-direction: column;
+    background:
+      linear-gradient(180deg, rgba(247, 252, 255, 0.42), rgba(226, 242, 255, 0.38)),
+      url('../assets/auth-background.png') 38% center / cover no-repeat,
+      #eff8ff;
   }
 
   .auth-brand {

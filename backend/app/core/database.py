@@ -109,6 +109,48 @@ async def init_databases():
                 END $$;
             """)
         )
+
+        # Add SubAgent orchestration state column for existing deployments
+        await conn.execute(
+            text("""
+                ALTER TABLE scan_tasks
+                ADD COLUMN IF NOT EXISTS sub_agents JSON DEFAULT '[]'::json;
+            """)
+        )
+
+        # Add per-agent LLM activation flags for existing deployments
+        await conn.execute(
+            text("""
+                ALTER TABLE IF EXISTS llm_configs
+                ADD COLUMN IF NOT EXISTS active_for_main_agent BOOLEAN DEFAULT FALSE;
+            """)
+        )
+        await conn.execute(
+            text("""
+                ALTER TABLE IF EXISTS llm_configs
+                ADD COLUMN IF NOT EXISTS active_for_sub_agent BOOLEAN DEFAULT FALSE;
+            """)
+        )
+        await conn.execute(
+            text("""
+                DO $$
+                BEGIN
+                    IF to_regclass('public.llm_configs') IS NOT NULL THEN
+                        UPDATE llm_configs
+                        SET active_for_main_agent = TRUE,
+                            active_for_sub_agent = TRUE,
+                            is_active = FALSE
+                        WHERE is_active = TRUE
+                          AND active_for_main_agent = FALSE
+                          AND active_for_sub_agent = FALSE;
+
+                        UPDATE llm_configs
+                        SET is_active = FALSE
+                        WHERE is_active = TRUE;
+                    END IF;
+                END $$;
+            """)
+        )
     
     # Create PostgreSQL tables
     from app.models.database import Base

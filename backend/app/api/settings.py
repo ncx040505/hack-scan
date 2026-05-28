@@ -19,6 +19,47 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 # ============ LLM 配置 ============
 
+def _build_llm_response(config: LLMConfig) -> LLMConfigResponse:
+    return LLMConfigResponse(
+        id=config.id,
+        name=config.name,
+        provider=config.provider,
+        api_base_url=config.api_base_url,
+        has_api_key=bool(config.api_key),
+        model=config.model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        active_for_main_agent=config.active_for_main_agent,
+        active_for_sub_agent=config.active_for_sub_agent,
+        is_enabled=config.is_enabled,
+        priority=config.priority,
+        total_requests=config.total_requests,
+        failed_requests=config.failed_requests,
+        last_used_at=config.last_used_at,
+        last_error=config.last_error,
+        created_at=config.created_at,
+        updated_at=config.updated_at,
+    )
+
+
+async def _clear_llm_active_flags(db: AsyncSession, role: str, exclude_id: str | None = None):
+    conditions = []
+    if exclude_id:
+        conditions.append(LLMConfig.id != exclude_id)
+
+    stmt = update(LLMConfig)
+    if conditions:
+        stmt = stmt.where(*conditions)
+
+    values = {}
+    if role == "main":
+        values["active_for_main_agent"] = False
+    if role == "sub":
+        values["active_for_sub_agent"] = False
+
+    if values:
+        await db.execute(stmt.values(**values))
+
 @router.get("/llm", response_model=LLMConfigList)
 async def list_llm_configs(
     db: AsyncSession = Depends(get_db)
@@ -29,31 +70,7 @@ async def list_llm_configs(
     )
     configs = result.scalars().all()
     
-    return LLMConfigList(
-        total=len(configs),
-        items=[
-            LLMConfigResponse(
-                id=c.id,
-                name=c.name,
-                provider=c.provider,
-                api_base_url=c.api_base_url,
-                has_api_key=bool(c.api_key),
-                model=c.model,
-                temperature=c.temperature,
-                max_tokens=c.max_tokens,
-                is_active=c.is_active,
-                is_enabled=c.is_enabled,
-                priority=c.priority,
-                total_requests=c.total_requests,
-                failed_requests=c.failed_requests,
-                last_used_at=c.last_used_at,
-                last_error=c.last_error,
-                created_at=c.created_at,
-                updated_at=c.updated_at,
-            )
-            for c in configs
-        ]
-    )
+    return LLMConfigList(total=len(configs), items=[_build_llm_response(c) for c in configs])
 
 
 @router.post("/llm", response_model=LLMConfigResponse)
@@ -64,11 +81,10 @@ async def create_llm_config(
     """创建 LLM 配置"""
     config_id = str(uuid.uuid4())
     
-    # 如果设置为 active，先取消其他 active 配置
-    if data.is_active:
-        await db.execute(
-            update(LLMConfig).values(is_active=False)
-        )
+    if data.active_for_main_agent:
+        await _clear_llm_active_flags(db, "main")
+    if data.active_for_sub_agent:
+        await _clear_llm_active_flags(db, "sub")
     
     config = LLMConfig(
         id=config_id,
@@ -79,7 +95,9 @@ async def create_llm_config(
         model=data.model,
         temperature=data.temperature,
         max_tokens=data.max_tokens,
-        is_active=data.is_active,
+        is_active=False,
+        active_for_main_agent=data.active_for_main_agent,
+        active_for_sub_agent=data.active_for_sub_agent,
         is_enabled=True,
         priority=data.priority,
     )
@@ -90,25 +108,7 @@ async def create_llm_config(
     
     logger.info(f"LLM config created: {config.name}")
     
-    return LLMConfigResponse(
-        id=config.id,
-        name=config.name,
-        provider=config.provider,
-        api_base_url=config.api_base_url,
-        has_api_key=bool(config.api_key),
-        model=config.model,
-        temperature=config.temperature,
-        max_tokens=config.max_tokens,
-        is_active=config.is_active,
-        is_enabled=config.is_enabled,
-        priority=config.priority,
-        total_requests=config.total_requests,
-        failed_requests=config.failed_requests,
-        last_used_at=config.last_used_at,
-        last_error=config.last_error,
-        created_at=config.created_at,
-        updated_at=config.updated_at,
-    )
+    return _build_llm_response(config)
 
 
 @router.patch("/llm/{config_id}", response_model=LLMConfigResponse)
@@ -128,11 +128,10 @@ async def update_llm_config(
     
     update_dict = data.model_dump(exclude_unset=True)
     
-    # 如果设置为 active，先取消其他 active 配置
-    if update_dict.get('is_active'):
-        await db.execute(
-            update(LLMConfig).where(LLMConfig.id != config_id).values(is_active=False)
-        )
+    if update_dict.get('active_for_main_agent'):
+        await _clear_llm_active_flags(db, "main", config_id)
+    if update_dict.get('active_for_sub_agent'):
+        await _clear_llm_active_flags(db, "sub", config_id)
     
     for key, value in update_dict.items():
         setattr(config, key, value)
@@ -140,25 +139,7 @@ async def update_llm_config(
     await db.commit()
     await db.refresh(config)
     
-    return LLMConfigResponse(
-        id=config.id,
-        name=config.name,
-        provider=config.provider,
-        api_base_url=config.api_base_url,
-        has_api_key=bool(config.api_key),
-        model=config.model,
-        temperature=config.temperature,
-        max_tokens=config.max_tokens,
-        is_active=config.is_active,
-        is_enabled=config.is_enabled,
-        priority=config.priority,
-        total_requests=config.total_requests,
-        failed_requests=config.failed_requests,
-        last_used_at=config.last_used_at,
-        last_error=config.last_error,
-        created_at=config.created_at,
-        updated_at=config.updated_at,
-    )
+    return _build_llm_response(config)
 
 
 @router.delete("/llm/{config_id}")
@@ -186,9 +167,13 @@ async def delete_llm_config(
 @router.post("/llm/{config_id}/activate")
 async def activate_llm_config(
     config_id: str,
+    role: str = "main",
     db: AsyncSession = Depends(get_db)
 ):
-    """激活指定的 LLM 配置"""
+    """激活指定的 LLM 配置。role=main/sub"""
+    if role not in {"main", "sub"}:
+        raise HTTPException(status_code=400, detail="role 必须是 main 或 sub")
+
     result = await db.execute(
         select(LLMConfig).where(LLMConfig.id == config_id)
     )
@@ -197,16 +182,20 @@ async def activate_llm_config(
     if not config:
         raise HTTPException(status_code=404, detail="配置不存在")
     
-    # 取消所有其他配置的 active 状态
-    await db.execute(
-        update(LLMConfig).values(is_active=False)
-    )
+    if not config.is_enabled:
+        raise HTTPException(status_code=400, detail="不能激活已禁用的配置")
+
+    await _clear_llm_active_flags(db, role)
     
-    # 激活当前配置
-    config.is_active = True
+    if role == "main":
+        config.active_for_main_agent = True
+    else:
+        config.active_for_sub_agent = True
+
     await db.commit()
     
-    return {"message": f"已激活配置: {config.name}", "id": config_id}
+    role_label = {"main": "主 Agent", "sub": "子 Agent"}[role]
+    return {"message": f"已设为{role_label}配置: {config.name}", "id": config_id, "role": role}
 
 
 @router.post("/llm/{config_id}/test")
@@ -543,12 +532,19 @@ async def get_scan_settings_from_db(db: AsyncSession) -> ScanSettings:
 
 # ============ 获取活跃的 LLM 配置 ============
 
-async def get_active_llm_config(db: AsyncSession) -> LLMConfig | None:
-    """获取当前活跃的 LLM 配置"""
-    # 首先尝试获取 is_active=True 的配置
+async def get_active_llm_config(db: AsyncSession, role: str = "main") -> LLMConfig | None:
+    """获取当前活跃的 LLM 配置。role=main/sub"""
+    if role == "main":
+        active_column = LLMConfig.active_for_main_agent
+    elif role == "sub":
+        active_column = LLMConfig.active_for_sub_agent
+    else:
+        raise ValueError("role must be 'main' or 'sub'")
+
+    # 首先尝试获取指定用途的配置
     result = await db.execute(
         select(LLMConfig).where(
-            LLMConfig.is_active == True,
+            active_column == True,
             LLMConfig.is_enabled == True
         )
     )
@@ -556,7 +552,7 @@ async def get_active_llm_config(db: AsyncSession) -> LLMConfig | None:
     
     if config:
         return config
-    
+
     # 如果没有，按优先级和成功率选择
     result = await db.execute(
         select(LLMConfig).where(

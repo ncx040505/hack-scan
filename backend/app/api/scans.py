@@ -26,6 +26,25 @@ from tasks.celery_app import celery_app
 router = APIRouter(prefix="/scans", tags=["scans"])
 
 
+def _scan_task_response(task: ScanTask, vulnerability_count: int = 0) -> ScanTaskResponse:
+    """构造扫描任务响应，统一附带 SubAgent 编排状态"""
+    return ScanTaskResponse(
+        id=task.id,
+        target=task.target,
+        scan_type=task.scan_type,
+        status=task.status,
+        config=task.config,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+        created_at=task.created_at,
+        llm_summary=task.llm_summary,
+        llm_risk_score=task.llm_risk_score,
+        vulnerability_count=vulnerability_count,
+        remark=task.remark,
+        sub_agents=task.sub_agents or [],
+    )
+
+
 async def get_scan_task_with_access_check(
     scan_id: str,
     current_user: User,
@@ -80,20 +99,7 @@ async def create_scan(
     
     logger.info(f"Scan task created: {task_id} for {scan_req.target} by user {current_user.id}")
     
-    return ScanTaskResponse(
-        id=scan_task.id,
-        target=scan_task.target,
-        scan_type=scan_task.scan_type,
-        status=scan_task.status,
-        config=scan_task.config,
-        started_at=scan_task.started_at,
-        completed_at=scan_task.completed_at,
-        created_at=scan_task.created_at,
-        llm_summary=scan_task.llm_summary,
-        llm_risk_score=scan_task.llm_risk_score,
-        vulnerability_count=0,
-        remark=scan_task.remark
-    )
+    return _scan_task_response(scan_task)
 
 
 @router.get("", response_model=ScanTaskList)
@@ -147,20 +153,7 @@ async def list_scans(
         )
         vuln_count = (await db.execute(vuln_count_query)).scalar()
         
-        items.append(ScanTaskResponse(
-            id=task.id,
-            target=task.target,
-            scan_type=task.scan_type,
-            status=task.status,
-            config=task.config,
-            started_at=task.started_at,
-            completed_at=task.completed_at,
-            created_at=task.created_at,
-            llm_summary=task.llm_summary,
-            llm_risk_score=task.llm_risk_score,
-            vulnerability_count=vuln_count,
-            remark=task.remark
-        ))
+        items.append(_scan_task_response(task, vuln_count))
     
     return ScanTaskList(total=total, items=items)
 
@@ -180,20 +173,7 @@ async def get_scan(
     )
     vuln_count = (await db.execute(vuln_count_query)).scalar()
     
-    return ScanTaskResponse(
-        id=task.id,
-        target=task.target,
-        scan_type=task.scan_type,
-        status=task.status,
-        config=task.config,
-        started_at=task.started_at,
-        completed_at=task.completed_at,
-        created_at=task.created_at,
-        llm_summary=task.llm_summary,
-        llm_risk_score=task.llm_risk_score,
-        vulnerability_count=vuln_count,
-        remark=task.remark
-    )
+    return _scan_task_response(task, vuln_count)
 
 
 @router.get("/{scan_id}/progress", response_model=ScanProgressResponse)
@@ -204,6 +184,8 @@ async def get_scan_progress(
 ):
     """获取扫描任务进度（从 Celery 任务状态）"""
     task = await get_scan_task_with_access_check(scan_id, current_user, db)
+    phase = task.status.value.lower()
+    message = f"扫描状态: {task.status.value}"
     
     # 从 Celery 获取任务状态
     if task.status == ScanStatus.RUNNING:
@@ -229,12 +211,19 @@ async def get_scan_progress(
     elif task.status == ScanStatus.FAILED:
         phase = "failed"
         message = "扫描失败"
+    elif task.status == ScanStatus.PAUSED:
+        phase = "paused"
+        message = "等待用户回复..."
+    elif task.status == ScanStatus.CANCELLED:
+        phase = "cancelled"
+        message = "扫描已取消"
     
     return ScanProgressResponse(
         scan_id=scan_id,
         status=task.status,
         phase=phase,
-        message=message
+        message=message,
+        sub_agents=task.sub_agents or [],
     )
 
 
@@ -767,7 +756,7 @@ async def chat_about_scan(
     from app.api.settings import get_active_llm_config
     from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as config_db:
-        db_config = await get_active_llm_config(config_db)
+        db_config = await get_active_llm_config(config_db, role="sub")
     
     if not db_config:
         raise HTTPException(status_code=503, detail="LLM 配置未设置，请在设置中配置 LLM")

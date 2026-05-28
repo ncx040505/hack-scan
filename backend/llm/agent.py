@@ -126,7 +126,7 @@ class SecurityAgent:
             # 从数据库加载配置
             from app.api.settings import get_active_llm_config
             async with self.session_factory() as db:
-                db_config = await get_active_llm_config(db)
+                db_config = await get_active_llm_config(db, role="main")
                 if db_config:
                     config = {
                         'model': db_config.model,
@@ -135,7 +135,7 @@ class SecurityAgent:
                         'base_url': db_config.api_base_url,
                         'max_tokens': db_config.max_tokens,
                     }
-                    await self._log("info", f"🤖 使用 LLM 配置: {db_config.name}", 
+                    await self._log("info", f"🤖 主 Agent 使用 LLM 配置: {db_config.name}", 
                                   f"模型: {db_config.model}")
                 else:
                     # 无配置时抛出异常

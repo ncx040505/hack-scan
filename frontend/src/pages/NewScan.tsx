@@ -40,6 +40,7 @@ export default function NewScan() {
   const [config, setConfig] = useState<Partial<ScanConfig>>({
     enable_port_scan: true,
     enable_nuclei: true,
+    enable_sub_agents: true,
     scan_depth: 3,
     rate_limit: 10,
     ai_max_iterations: 0,  // 0 表示无限制
@@ -356,6 +357,21 @@ export default function NewScan() {
               </div>
 
               {/* AI Max Iterations */}
+              <label className="flex items-start gap-3 rounded-lg border border-purple-200 dark:border-purple-900/60 bg-purple-50 dark:bg-purple-950/30 p-3">
+                <input
+                  type="checkbox"
+                  checked={config.enable_sub_agents ?? true}
+                  onChange={e => setConfig({ ...config, enable_sub_agents: e.target.checked })}
+                  className="w-4 h-4 mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-medium">启用 SubAgent 任务编排</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    主 Agent 会把侦察、漏洞验证、AI 验证、报告生成拆分给多个 SubAgent，并在扫描详情中展示进度。
+                  </span>
+                </span>
+              </label>
+
               <div>
                 <label className="block text-sm font-medium mb-2">
                   最大迭代次数

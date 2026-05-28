@@ -85,6 +85,7 @@ class ScanTask(Base):
     llm_summary = Column(Text)  # AI 生成的漏洞总结
     llm_risk_score = Column(Integer)  # AI 评估的风险分数 0-100
     attack_path_analysis = Column(JSON)  # AI 生成的攻击路径分析
+    sub_agents = Column(JSON, default=list)  # SubAgent 编排状态
     
     # 用户备注
     remark = Column(Text)  # 用户对扫描的备注
@@ -183,6 +184,8 @@ class LLMConfig(Base):
     
     # 状态
     is_active = Column(Boolean, default=False)  # 是否为当前使用的配置
+    active_for_main_agent = Column(Boolean, default=False)  # 是否供主 Agent 使用
+    active_for_sub_agent = Column(Boolean, default=False)  # 是否供子 Agent/分析器使用
     is_enabled = Column(Boolean, default=True)  # 是否启用
     priority = Column(Integer, default=0)  # 优先级，用于自动选择
     

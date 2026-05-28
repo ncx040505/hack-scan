@@ -3,12 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
     AlertCircle,
+    Ban,
     CheckCircle,
     Eye,
     EyeOff,
     Globe,
     Key,
-    Hash,
     Cpu,
     Plus,
     Trash2,
@@ -84,7 +84,8 @@ interface LLMFormData {
     model: string
     temperature: number
     max_tokens: number
-    is_active: boolean
+    active_for_main_agent: boolean
+    active_for_sub_agent: boolean
     priority: number
 }
 
@@ -96,7 +97,8 @@ const defaultLLMFormData: LLMFormData = {
     model: 'gpt-4o',
     temperature: 10,
     max_tokens: 4096,
-    is_active: false,
+    active_for_main_agent: false,
+    active_for_sub_agent: false,
     priority: 0,
 }
 
@@ -194,7 +196,7 @@ function LLMSettingsTab() {
     })
 
     const activateMutation = useMutation({
-        mutationFn: (id: string) => activateLLMConfig(id),
+        mutationFn: ({ id, role }: { id: string; role: 'main' | 'sub' }) => activateLLMConfig(id, role),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['llm-configs'] })
         },
@@ -276,7 +278,8 @@ function LLMSettingsTab() {
             model: config.model,
             temperature: config.temperature,
             max_tokens: config.max_tokens,
-            is_active: config.is_active,
+            active_for_main_agent: config.active_for_main_agent,
+            active_for_sub_agent: config.active_for_sub_agent,
             priority: config.priority,
         })
         setShowForm(true)
@@ -292,7 +295,8 @@ function LLMSettingsTab() {
             model: formData.model.trim(),
             temperature: formData.temperature,
             max_tokens: formData.max_tokens,
-            is_active: formData.is_active,
+            active_for_main_agent: formData.active_for_main_agent,
+            active_for_sub_agent: formData.active_for_sub_agent,
             priority: formData.priority,
         }
 
@@ -323,7 +327,9 @@ function LLMSettingsTab() {
         updateMutation.mutate({ id: config.id, data: { is_enabled: !config.is_enabled } })
     }
 
-    const activeConfig = data?.items.find((c) => c.is_active)
+    const mainAgentConfig = data?.items.find((c) => c.active_for_main_agent)
+    const subAgentConfig = data?.items.find((c) => c.active_for_sub_agent)
+    const formatAgentModel = (config?: LLMConfig) => (config ? `${config.name}/${config.model}` : '未配置')
     const isBusy = createMutation.isPending || updateMutation.isPending
 
     if (isLoading) {
@@ -341,24 +347,24 @@ function LLMSettingsTab() {
     return (
         <div>
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <StatCard
-                    label="当前激活"
-                    value={activeConfig?.name || '未配置'}
+                    label="主 Agent"
+                    value={formatAgentModel(mainAgentConfig)}
                     icon={Zap}
-                    color={activeConfig ? 'text-green-500' : 'text-gray-400'}
+                    color={mainAgentConfig ? 'text-green-500' : 'text-gray-400'}
+                />
+                <StatCard
+                    label="子 Agent"
+                    value={formatAgentModel(subAgentConfig)}
+                    icon={Key}
+                    color={subAgentConfig ? 'text-indigo-500' : 'text-gray-400'}
                 />
                 <StatCard
                     label="配置数量"
                     value={data?.total.toString() || '0'}
                     icon={Server}
                     color="text-blue-500"
-                />
-                <StatCard
-                    label="活跃模型"
-                    value={activeConfig?.model || '-'}
-                    icon={Hash}
-                    color="text-purple-500"
                 />
             </div>
 
@@ -389,12 +395,11 @@ function LLMSettingsTab() {
                             <LLMConfigItem
                                 key={config.id}
                                 config={config}
-                                isActive={config.is_active}
                                 isTesting={testingId === config.id}
                                 testResult={testResult?.id === config.id ? testResult : null}
                                 onEdit={() => handleEdit(config)}
                                 onDelete={() => handleDelete(config.id, config.name)}
-                                onActivate={() => activateMutation.mutate(config.id)}
+                                onActivate={(role) => activateMutation.mutate({ id: config.id, role })}
                                 onTest={() => handleTest(config.id)}
                                 onToggleEnabled={() => handleToggleEnabled(config)}
                             />
@@ -626,17 +631,26 @@ function LLMSettingsTab() {
                                 />
                             </div>
 
-                            {/* Set Active */}
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    id="is_active"
-                                    checked={formData.is_active}
-                                    onChange={(e) => setFormData((p) => ({ ...p, is_active: e.target.checked }))}
-                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <label htmlFor="is_active" className="text-sm text-gray-700 dark:text-gray-300">
-                                    设为当前激活配置
+                            {/* Agent Usage */}
+                            <div className="space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Agent 使用范围</p>
+                                <label className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.active_for_main_agent}
+                                        onChange={(e) => setFormData((p) => ({ ...p, active_for_main_agent: e.target.checked }))}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    设为主 Agent API
+                                </label>
+                                <label className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.active_for_sub_agent}
+                                        onChange={(e) => setFormData((p) => ({ ...p, active_for_sub_agent: e.target.checked }))}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    设为子 Agent/API 分析器
                                 </label>
                             </div>
 
@@ -681,7 +695,8 @@ function LLMSettingsTab() {
                 <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-3">配置说明</h2>
                 <ul className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
                     <li>• 支持 OpenAI 及其兼容 API（DeepSeek、通义千问、Ollama 等）</li>
-                    <li>• 可以配置多个 LLM，系统会使用"激活"的配置</li>
+                    <li>• 可以分别指定主 Agent 和子 Agent/API 分析器使用的配置</li>
+                    <li>• 未单独指定时系统会按优先级自动选择可用配置</li>
                     <li>• 本地 Ollama 模型无需 API Key，只需设置正确的 Base URL</li>
                     <li>• Temperature 越低输出越确定，建议扫描分析使用 0.1 左右</li>
                 </ul>
@@ -692,7 +707,6 @@ function LLMSettingsTab() {
 
 function LLMConfigItem({
     config,
-    isActive,
     isTesting,
     testResult,
     onEdit,
@@ -702,12 +716,11 @@ function LLMConfigItem({
     onToggleEnabled,
 }: {
     config: LLMConfig
-    isActive: boolean
     isTesting: boolean
     testResult: { success: boolean; message: string } | null
     onEdit: () => void
     onDelete: () => void
-    onActivate: () => void
+    onActivate: (role: 'main' | 'sub') => void
     onTest: () => void
     onToggleEnabled: () => void
 }) {
@@ -724,9 +737,14 @@ function LLMConfigItem({
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{config.name}</h3>
-                        {isActive && (
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                激活
+                        {config.active_for_main_agent && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                主 Agent
+                            </span>
+                        )}
+                        {config.active_for_sub_agent && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                子 Agent
                             </span>
                         )}
                         {!config.is_enabled && (
@@ -741,7 +759,7 @@ function LLMConfigItem({
                             {provider?.label || config.provider}
                         </span>
                         <span className="flex items-center gap-1">
-                            <Hash className="w-3.5 h-3.5" />
+                               <span className="w-3.5 h-3.5 inline-flex items-center justify-center text-xs">#</span>
                             {config.model}
                         </span>
                         <span className="flex items-center gap-1">
@@ -783,13 +801,22 @@ function LLMConfigItem({
                             <Play className="w-4 h-4" />
                         )}
                     </button>
-                    {!isActive && config.is_enabled && (
+                    {config.is_enabled && (
                         <button
-                            onClick={onActivate}
-                            className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                            title="激活此配置"
+                            onClick={() => onActivate('main')}
+                            className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="设为主 Agent API"
                         >
                             <Zap className="w-4 h-4" />
+                        </button>
+                    )}
+                    {config.is_enabled && (
+                        <button
+                            onClick={() => onActivate('sub')}
+                            className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                            title="设为子 Agent API"
+                        >
+                            <Cpu className="w-4 h-4" />
                         </button>
                     )}
                     <button
@@ -810,7 +837,7 @@ function LLMConfigItem({
                         title={config.is_enabled ? '禁用' : '启用'}
                     >
                         {config.is_enabled ? (
-                            <AlertCircle className="w-4 h-4" />
+                            <Ban className="w-4 h-4" />
                         ) : (
                             <CheckCircle className="w-4 h-4" />
                         )}
@@ -967,7 +994,7 @@ function SearchSettingsTab() {
                 <StatCard
                     label="最大返回条数"
                     value={maxResults.toString()}
-                    icon={Hash}
+                    icon={Key}
                     color="text-purple-500"
                 />
             </div>

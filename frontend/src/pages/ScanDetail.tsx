@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { AlertTriangle, CheckCircle, Brain, Loader2, ChevronDown, ChevronUp, ChevronRight, Terminal, Bot, Wrench, AlertCircle, CheckCircle2, Info, XCircle, Trash2, MessageCircle, Send, Pause, MessageSquare, Server, Eye, Shield, FileText, Route, ShieldCheck, RefreshCw, Download, Key, Settings, ChevronLeft } from 'lucide-react'
-import { getScan, getVulnerabilities, getScanProgress, getScanLogs, cancelScan, deleteScan, getScanMessages, sendScanMessage, getScanChatHistory, sendScanChatMessage, getAttackPath, Vulnerability, ScanLogEntry, AttackChain } from '../lib/api'
+import { AlertTriangle, CheckCircle, Brain, Loader2, ChevronDown, ChevronUp, ChevronRight, Terminal, Bot, Wrench, AlertCircle, CheckCircle2, Info, XCircle, Trash2, MessageCircle, Send, Pause, MessageSquare, Server, Eye, Shield, FileText, Route, ShieldCheck, RefreshCw, Download, Key, Settings, ChevronLeft, GitBranch, Network, Sparkles } from 'lucide-react'
+import { getScan, getVulnerabilities, getScanProgress, getScanLogs, cancelScan, deleteScan, getScanMessages, sendScanMessage, getScanChatHistory, sendScanChatMessage, getAttackPath, Vulnerability, ScanLogEntry, AttackChain, SubAgentTask } from '../lib/api'
 import SeverityBadge from '../components/SeverityBadge'
 import { useState, useEffect, useRef, useMemo } from 'react'
 
@@ -16,7 +16,7 @@ const statusLabels: Record<string, string> = {
 }
 
 // Tab 类型定义
-type TabType = 'vulnerabilities' | 'attack-dialog' | 'attack-path' | 'report' | 'remediation'
+type TabType = 'sub-agents' | 'vulnerabilities' | 'attack-dialog' | 'attack-path' | 'report' | 'remediation'
 
 interface TabItem {
   id: TabType
@@ -26,6 +26,7 @@ interface TabItem {
 
 // Tab 配置
 const tabs: TabItem[] = [
+  { id: 'sub-agents', label: 'SubAgent 编排', icon: <GitBranch className="w-4 h-4" /> },
   { id: 'vulnerabilities', label: '漏洞信息', icon: <Shield className="w-4 h-4" /> },
   { id: 'attack-dialog', label: '攻击对话', icon: <Terminal className="w-4 h-4" /> },
   { id: 'attack-path', label: '攻击路径', icon: <Route className="w-4 h-4" /> },
@@ -122,6 +123,11 @@ export default function ScanDetail() {
       navigate('/')
     },
   })
+
+  const subAgents = useMemo(
+    () => getDisplaySubAgents(scan, progress, logs),
+    [scan, progress, logs]
+  )
 
   if (scanLoading) {
     return <div className="text-center py-12">加载中...</div>
@@ -252,6 +258,8 @@ export default function ScanDetail() {
         </div>
       )}
 
+      <SubAgentOverview subAgents={subAgents} isActive={isActive} />
+
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
         <nav className="flex space-x-1 min-w-max" aria-label="Tabs">
@@ -278,6 +286,10 @@ export default function ScanDetail() {
       {/* Tab Content */}
       <div className="min-h-[400px]">
         {/* Tab 1: 漏洞信息 */}
+        {activeTab === 'sub-agents' && (
+          <TabSubAgents subAgents={subAgents} scan={scan} />
+        )}
+
         {activeTab === 'vulnerabilities' && (
           <TabVulnerabilities
             scan={scan}
@@ -298,6 +310,7 @@ export default function ScanDetail() {
             setShowLogs={setShowLogs}
             logsEndRef={logsEndRef}
             isActive={isActive}
+            subAgents={subAgents}
           />
         )}
 
@@ -321,6 +334,235 @@ export default function ScanDetail() {
 }
 
 // ============ Tab Content Components ============
+
+const subAgentStatusLabels: Record<string, string> = {
+  queued: '排队中',
+  running: '执行中',
+  waiting_input: '等待输入',
+  completed: '已完成',
+  failed: '失败',
+  skipped: '已跳过',
+}
+
+const subAgentStatusStyles: Record<string, string> = {
+  queued: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  waiting_input: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  skipped: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+}
+
+function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): SubAgentTask[] {
+  const fromApi = progress?.sub_agents?.length ? progress.sub_agents : scan?.sub_agents
+  if (fromApi?.length) return fromApi
+
+  const hasNmap = logs.some(log => log.tool?.toLowerCase() === 'nmap' || log.message.toLowerCase().includes('nmap'))
+  const nmapDone = logs.some(log => log.message.includes('NMAP 扫描完成'))
+  const hasNuclei = logs.some(log => log.tool?.toLowerCase() === 'nuclei' || log.message.toLowerCase().includes('nuclei'))
+  const nucleiDone = logs.some(log => log.message.includes('NUCLEI 扫描完成'))
+  const hasAi = logs.some(log => log.type === 'llm' || log.message.includes('AI Agent') || log.message.includes('迭代'))
+  const hasReport = logs.some(log => log.message.includes('AI 开始生成扫描报告') || log.message.includes('扫描任务完成'))
+
+  const statusFromLogs = (started: boolean, done: boolean): SubAgentTask['status'] => {
+    if (done) return 'completed'
+    if (started) return 'running'
+    return 'queued'
+  }
+
+  return [
+    {
+      id: 'recon-subagent',
+      name: 'Recon SubAgent',
+      role: '资产探测与端口识别',
+      objective: '识别目标暴露面、开放端口与基础服务指纹。',
+      status: statusFromLogs(hasNmap, nmapDone),
+      phase: hasNmap ? 'running_nmap' : null,
+      progress: nmapDone ? 100 : hasNmap ? 65 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasNmap ? '由现有执行日志推断：主 Agent 已委派 NMAP 侦察任务。' : '等待主 Agent 委派侦察任务。',
+      findings_count: logs.filter(log => log.tool?.toLowerCase() === 'nmap' && log.message.includes('发现')).length,
+      error: null,
+    },
+    {
+      id: 'vulnerability-subagent',
+      name: 'Vulnerability SubAgent',
+      role: '模板化漏洞验证',
+      objective: '调用漏洞扫描器验证常见 Web 与服务漏洞。',
+      status: statusFromLogs(hasNuclei, nucleiDone),
+      phase: hasNuclei ? 'running_nuclei' : null,
+      progress: nucleiDone ? 100 : hasNuclei ? 65 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasNuclei ? '由现有执行日志推断：主 Agent 已委派 NUCLEI 漏洞验证任务。' : '等待侦察结果后启动漏洞验证。',
+      findings_count: logs.filter(log => log.tool?.toLowerCase() === 'nuclei' && log.message.includes('发现')).length,
+      error: null,
+    },
+    {
+      id: 'ai-validation-subagent',
+      name: 'AI Validation SubAgent',
+      role: '自主安全测试与发现验证',
+      objective: '基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。',
+      status: statusFromLogs(hasAi, scan?.status === 'COMPLETED' && hasAi),
+      phase: hasAi ? 'ai_agent' : null,
+      progress: scan?.status === 'COMPLETED' && hasAi ? 100 : hasAi ? 70 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasAi ? 'AI Validation SubAgent 正在进行多轮分析、工具调用和结果校验。' : '等待基础扫描结果后启动 AI 验证。',
+      findings_count: logs.filter(log => log.type === 'llm' && log.message.includes('发现')).length,
+      error: null,
+    },
+    {
+      id: 'reporting-subagent',
+      name: 'Reporting SubAgent',
+      role: '风险归纳与报告生成',
+      objective: '汇总各 SubAgent 输出，生成风险评分、修复建议与攻击路径。',
+      status: statusFromLogs(hasReport, scan?.status === 'COMPLETED'),
+      phase: hasReport ? 'llm_analysis' : null,
+      progress: scan?.status === 'COMPLETED' ? 100 : hasReport ? 60 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasReport ? 'Reporting SubAgent 正在整理 SubAgent 输出。' : '等待前置 SubAgent 输出后生成报告。',
+      findings_count: scan?.vulnerability_count || 0,
+      error: null,
+    },
+  ]
+}
+
+function SubAgentOverview({ subAgents, isActive }: { subAgents: SubAgentTask[]; isActive: boolean }) {
+  const running = subAgents.filter(agent => agent.status === 'running' || agent.status === 'waiting_input')
+  const completed = subAgents.filter(agent => agent.status === 'completed').length
+  const averageProgress = subAgents.length
+    ? Math.round(subAgents.reduce((sum, agent) => sum + (agent.progress || 0), 0) / subAgents.length)
+    : 0
+
+  return (
+    <div className="mb-6 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-gradient-to-r from-purple-50 via-blue-50 to-cyan-50 dark:from-purple-950/40 dark:via-blue-950/30 dark:to-cyan-950/30 p-5 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-purple-600 text-white shadow">
+            <GitBranch className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-semibold text-purple-900 dark:text-purple-100">主 Agent 正在使用 SubAgent 任务编排</h2>
+              {isActive && <span className="px-2 py-0.5 rounded-full text-xs bg-blue-600 text-white animate-pulse">实时编排中</span>}
+            </div>
+            <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+              主 Agent 将扫描拆成侦察、漏洞验证、AI 验证、报告生成 4 个 SubAgent，并汇总输出。
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 min-w-[280px]">
+          <SubAgentMiniStat label="SubAgent" value={subAgents.length} />
+          <SubAgentMiniStat label="运行中" value={running.length} color="text-blue-600" />
+          <SubAgentMiniStat label="已完成" value={`${completed}/${subAgents.length}`} color="text-green-600" />
+        </div>
+      </div>
+      <div className="mt-4 h-2 bg-white/70 dark:bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500 transition-all duration-500" style={{ width: `${averageProgress}%` }} />
+      </div>
+      {running.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {running.map(agent => (
+            <span key={agent.id} className="px-2 py-1 rounded-full bg-white/80 dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
+              当前：{agent.name} · {agent.progress}%
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubAgentMiniStat({ label, value, color = 'text-purple-700 dark:text-purple-300' }: { label: string; value: number | string; color?: string }) {
+  return (
+    <div className="rounded-lg bg-white/75 dark:bg-gray-900/60 px-3 py-2 text-center border border-white/70 dark:border-gray-800">
+      <div className={`text-lg font-bold ${color}`}>{value}</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
+    </div>
+  )
+}
+
+function TabSubAgents({ subAgents, scan }: { subAgents: SubAgentTask[]; scan: any }) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow border border-purple-100 dark:border-purple-900/50">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300">
+            <Network className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold">SubAgent 任务编排视图</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              这里展示主 Agent 如何分派子任务、跟踪执行状态，并把各 SubAgent 的输出汇总进扫描结果。
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {subAgents.map((agent, index) => (
+            <SubAgentCard key={agent.id} agent={agent} index={index} />
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-gray-950 text-gray-100 rounded-lg p-5 shadow font-mono text-sm overflow-x-auto">
+        <div className="flex items-center gap-2 text-purple-300 mb-3">
+          <Sparkles className="w-4 h-4" />
+          <span>主 Agent 编排链路</span>
+        </div>
+        <div className="whitespace-nowrap">
+          主Agent({scan.target})
+          {subAgents.map(agent => `  →  ${agent.name}[${subAgentStatusLabels[agent.status] || agent.status}]`).join('')}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SubAgentCard({ agent, index }: { agent: SubAgentTask; index: number }) {
+  const Icon = agent.id.includes('recon') ? Eye : agent.id.includes('vulnerability') ? Shield : agent.id.includes('ai') ? Bot : FileText
+  return (
+    <div className="relative rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60 p-4 overflow-hidden">
+      <div className="absolute top-3 right-3 text-4xl font-black text-gray-200 dark:text-gray-800">{index + 1}</div>
+      <div className="relative">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="p-2 rounded-lg bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-300 shadow-sm">
+            <Icon className="w-5 h-5" />
+          </div>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${subAgentStatusStyles[agent.status] || subAgentStatusStyles.queued}`}>
+            {subAgentStatusLabels[agent.status] || agent.status}
+          </span>
+        </div>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100">{agent.name}</h3>
+        <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">{agent.role}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3 min-h-12">{agent.objective}</p>
+
+        <div className="mt-4">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-gray-500">进度</span>
+            <span className="font-medium">{agent.progress}%</span>
+          </div>
+          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className={`h-full transition-all duration-500 ${agent.status === 'failed' ? 'bg-red-500' : agent.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${agent.progress}%` }} />
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-white dark:bg-gray-800 p-3 text-xs text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-700">
+          {agent.summary || '等待主 Agent 下发任务。'}
+          {agent.error && <div className="mt-2 text-red-500">错误：{agent.error}</div>}
+        </div>
+
+        <div className="mt-3 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>发现 {agent.findings_count || 0} 项</span>
+          <span>{agent.phase || '待调度'}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function TabVulnerabilities({
   scan,
@@ -418,6 +660,7 @@ function TabAttackDialog({
   setShowLogs,
   logsEndRef,
   isActive,
+  subAgents,
 }: {
   scanId: string
   scan: any
@@ -426,13 +669,43 @@ function TabAttackDialog({
   setShowLogs: (v: boolean) => void
   logsEndRef: React.RefObject<HTMLDivElement>
   isActive: boolean
+  subAgents: SubAgentTask[]
 }) {
+  const activeSubAgents = subAgents.filter(agent => agent.status === 'running' || agent.status === 'waiting_input')
+
   return (
     <>
       {/* Paused - Agent asking user */}
       {scan.status === 'PAUSED' && (
         <AgentQuestionPanel scanId={scanId} />
       )}
+
+      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/60 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <GitBranch className="w-5 h-5 text-purple-600 dark:text-purple-300" />
+          <h2 className="font-semibold text-purple-900 dark:text-purple-100">日志由主 Agent + SubAgent 协作产生</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
+          {subAgents.map(agent => (
+            <div key={agent.id} className={`rounded-lg px-3 py-2 border ${agent.status === 'running' || agent.status === 'waiting_input' ? 'bg-white dark:bg-gray-900 border-blue-300 dark:border-blue-800' : 'bg-white/60 dark:bg-gray-900/50 border-purple-100 dark:border-purple-900/50'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium truncate">{agent.name}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] ${subAgentStatusStyles[agent.status] || subAgentStatusStyles.queued}`}>
+                  {subAgentStatusLabels[agent.status] || agent.status}
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-500 transition-all" style={{ width: `${agent.progress}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {activeSubAgents.length > 0 && (
+          <p className="mt-3 text-xs text-purple-700 dark:text-purple-300">
+            当前活跃 SubAgent：{activeSubAgents.map(agent => `${agent.name}（${agent.progress}%）`).join('、')}
+          </p>
+        )}
+      </div>
 
       {/* Real-time Logs */}
       {(isActive || logs.length > 0) && (

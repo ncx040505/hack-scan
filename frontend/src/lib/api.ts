@@ -75,9 +75,25 @@ export interface ScanConfig {
   scan_depth: number
   rate_limit: number
   enable_ai_agent?: boolean
+  enable_sub_agents?: boolean
   ai_max_iterations?: number  // 0 = unlimited
   ai_custom_prompt?: string
   ai_persona_id?: string | null  // AI 人格 ID
+}
+
+export interface SubAgentTask {
+  id: string
+  name: string
+  role: string
+  objective: string
+  status: 'queued' | 'running' | 'waiting_input' | 'completed' | 'failed' | 'skipped'
+  phase: string | null
+  progress: number
+  started_at: string | null
+  completed_at: string | null
+  summary: string | null
+  findings_count: number
+  error: string | null
 }
 
 export interface ScanTask {
@@ -93,6 +109,7 @@ export interface ScanTask {
   llm_risk_score: number | null
   vulnerability_count: number
   remark?: string | null
+  sub_agents: SubAgentTask[]
 }
 
 export interface Vulnerability {
@@ -158,6 +175,7 @@ export interface ScanProgress {
   status: string
   phase: string | null
   message: string | null
+  sub_agents: SubAgentTask[]
 }
 
 export async function getScanProgress(scanId: string) {
@@ -378,7 +396,8 @@ export interface LLMConfig {
   model: string
   temperature: number
   max_tokens: number
-  is_active: boolean
+  active_for_main_agent: boolean
+  active_for_sub_agent: boolean
   is_enabled: boolean
   priority: number
   total_requests: number
@@ -397,7 +416,8 @@ export interface LLMConfigCreate {
   model: string
   temperature?: number
   max_tokens?: number
-  is_active?: boolean
+  active_for_main_agent?: boolean
+  active_for_sub_agent?: boolean
   priority?: number
 }
 
@@ -428,8 +448,8 @@ export async function deleteLLMConfig(id: string) {
   return data
 }
 
-export async function activateLLMConfig(id: string) {
-  const { data } = await api.post(`/settings/llm/${id}/activate`)
+export async function activateLLMConfig(id: string, role: 'main' | 'sub' = 'main') {
+  const { data } = await api.post(`/settings/llm/${id}/activate`, null, { params: { role } })
   return data
 }
 
