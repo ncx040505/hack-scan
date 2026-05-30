@@ -48,6 +48,12 @@ const statusLabels: Record<string, string> = {
   CANCELLED: '已取消',
 }
 
+const scanTypeLabels: Record<string, string> = {
+  full: '完整扫描',
+  quick: '资产扫描',
+  custom: '自定义',
+}
+
 const statusFilterOptions = [
   { value: '', label: '全部状态' },
   { value: 'PENDING', label: '等待中' },
@@ -442,8 +448,8 @@ function ScanRow({
           {scan.target}
         </Link>
       </td>
-      <td className="px-4 py-3 capitalize text-gray-600 dark:text-gray-300">
-        {scan.scan_type}
+      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+        {scanTypeLabels[scan.scan_type] || scan.scan_type}
       </td>
       <td className="px-4 py-3">
         <span

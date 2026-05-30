@@ -46,6 +46,12 @@ const statusLabels: Record<string, string> = {
   CANCELLED: '已取消',
 }
 
+const scanTypeLabels: Record<string, string> = {
+  full: '完整扫描',
+  quick: '资产扫描',
+  custom: '自定义',
+}
+
 // Chart color constants
 const chartStatusColors: Record<string, string> = {
   PENDING: '#EAB308',
@@ -150,7 +156,7 @@ export default function Dashboard() {
     })
     const typeColors = ['#3B82F6', '#22C55E', '#EAB308', '#F97316', '#8B5CF6', '#EC4899']
     const scanTypeData = Object.entries(typeCount).map(([type, count], index) => ({
-      name: type,
+      name: scanTypeLabels[type] || type,
       value: count,
       color: typeColors[index % typeColors.length],
     }))
@@ -252,8 +258,8 @@ export default function Dashboard() {
       <div className="text-center py-12">
         <div className="text-red-500 font-semibold mb-2">加载失败</div>
         <div className="text-sm text-red-400 mb-4">错误: {errorMsg}</div>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
           重新加载
@@ -493,23 +499,15 @@ export default function Dashboard() {
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-              <table className="w-full table-fixed">
-                <colgroup>
-                  <col style={{ width: '30%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '20%' }} />
-                </colgroup>
+              <table className="w-full">
                 <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">目标</th>
-                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">类型</th>
-                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">状态</th>
-                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">漏洞</th>
-                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">风险评分</th>
-                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200">创建时间</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200 whitespace-nowrap">类型</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200 whitespace-nowrap">状态</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200 whitespace-nowrap">漏洞</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200 whitespace-nowrap">风险评分</th>
+                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-200 whitespace-nowrap">创建时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -595,7 +593,7 @@ function ScanRow({ scan }: { scan: ScanTask }) {
 
   return (
     <tr className="h-14 border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
-      <td className="px-4 py-0 align-middle">
+      <td className="px-4 py-0 align-middle max-w-0">
         <Link
           to={`/scans/${scan.id}`}
           className="block truncate text-blue-600 dark:text-blue-400 hover:underline"
@@ -603,7 +601,7 @@ function ScanRow({ scan }: { scan: ScanTask }) {
           {scan.target}
         </Link>
       </td>
-      <td className="px-4 py-0 align-middle capitalize whitespace-nowrap truncate">{scan.scan_type}</td>
+      <td className="px-4 py-0 align-middle whitespace-nowrap">{scanTypeLabels[scan.scan_type] || scan.scan_type}</td>
       <td className="px-4 py-0 align-middle">
         <span className={`flex items-center gap-2 whitespace-nowrap ${statusColors[scan.status] || 'text-gray-500'}`}>
           <StatusIcon className="w-4 h-4" />

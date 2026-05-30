@@ -15,6 +15,12 @@ const statusLabels: Record<string, string> = {
   CANCELLED: '已取消',
 }
 
+const scanTypeLabels: Record<string, string> = {
+  full: '完整扫描',
+  quick: '资产扫描',
+  custom: '自定义',
+}
+
 // Tab 类型定义
 type TabType = 'sub-agents' | 'vulnerabilities' | 'attack-dialog' | 'attack-path' | 'report' | 'remediation'
 
@@ -148,7 +154,7 @@ export default function ScanDetail() {
         <div>
           <h1 className="text-2xl font-bold mb-2">{scan.target}</h1>
           <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
-            <span className="capitalize">{scan.scan_type} 扫描</span>
+            <span>{scanTypeLabels[scan.scan_type] || scan.scan_type}</span>
             <span>•</span>
             <span>{format(new Date(scan.created_at), 'yyyy-MM-dd HH:mm')}</span>
             <span>•</span>
@@ -1592,7 +1598,7 @@ function generateMarkdownReport(data: any): string {
 
 ## 扫描信息
 - **目标**: ${data.scan.target}
-- **扫描类型**: ${data.scan.scan_type}
+- **扫描类型**: ${scanTypeLabels[data.scan.scan_type] || data.scan.scan_type}
 - **状态**: ${data.scan.status}
 - **开始时间**: ${data.scan.started_at || '-'}
 - **完成时间**: ${data.scan.completed_at || '-'}
@@ -1689,7 +1695,7 @@ function generateHTMLReport(data: any): string {
     
     <h2>扫描信息</h2>
     <p><strong>目标:</strong> ${data.scan.target}</p>
-    <p><strong>扫描类型:</strong> ${data.scan.scan_type}</p>
+    <p><strong>扫描类型:</strong> ${scanTypeLabels[data.scan.scan_type] || data.scan.scan_type}</p>
     <p><strong>风险评分:</strong> ${data.scan.risk_score ?? '-'}/100</p>
     
     <h2>漏洞统计</h2>

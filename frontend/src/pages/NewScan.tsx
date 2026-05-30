@@ -6,7 +6,7 @@ import { createScan, ScanConfig, getPersonasBrief } from '../lib/api'
 
 const scanTypeLabels: Record<string, { name: string; desc: string }> = {
   full: { name: '完整扫描', desc: '包含所有端口的全面扫描' },
-  quick: { name: '仅扫描端口', desc: '仅扫描常用端口，不进行漏洞检测' },
+  quick: { name: '资产扫描', desc: '仅扫描资产，不进行漏洞检测' },
   custom: { name: '自定义', desc: '手动配置扫描选项' },
 }
 
