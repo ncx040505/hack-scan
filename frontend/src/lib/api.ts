@@ -68,14 +68,63 @@ api.interceptors.response.use(
 
 // Types
 export interface ScanConfig {
-  enable_port_scan: boolean
-  enable_web_scan: boolean
+  // 扫描类别开关
+  enable_category_network: boolean
+  enable_category_vuln: boolean
+  enable_category_web: boolean
+  enable_category_cred: boolean
+  enable_category_post_exploit: boolean
+
+  // 网络扫描与资产识别
+  enable_nmap: boolean
+  enable_masscan: boolean
+  enable_naabu: boolean
+  enable_rustscan: boolean
+  enable_httpx: boolean
+  enable_whatweb: boolean
+  enable_katana: boolean
+
+  // 漏洞扫描与组件分析
   enable_nuclei: boolean
   enable_nikto: boolean
-  enable_gobuster: boolean
+  enable_wapiti: boolean
+  enable_trivy: boolean
+  enable_grype: boolean
+  enable_lynis: boolean
+  enable_searchsploit: boolean
+  enable_yara: boolean
+
+  // Web/API 测试
   enable_sqlmap: boolean
-  enable_whatweb: boolean
+  enable_ffuf: boolean
+  enable_dirsearch: boolean
+  enable_gobuster: boolean
+  enable_feroxbuster: boolean
+  enable_wfuzz: boolean
+  enable_dalfox: boolean
+  enable_xsstrike: boolean
+  enable_commix: boolean
+  enable_jwt_tool: boolean
+  enable_newman: boolean
   enable_sslscan: boolean
+
+  // 凭证与身份验证（默认禁用）
+  enable_hydra: boolean
+  enable_medusa: boolean
+  enable_netexec: boolean
+  enable_cewl: boolean
+  enable_kerbrute: boolean
+  enable_enum4linux: boolean
+
+  // 后渗透与取证辅助（默认禁用）
+  enable_gitleaks: boolean
+  enable_trufflehog: boolean
+  enable_pspy: boolean
+  enable_linpeas: boolean
+  enable_linenum: boolean
+  enable_linux_exploit_suggester: boolean
+
+  // 通用配置
   custom_ports: number[]
   scan_depth: number
   rate_limit: number

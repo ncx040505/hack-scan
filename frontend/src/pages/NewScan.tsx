@@ -38,19 +38,63 @@ export default function NewScan() {
   const [isUrlTarget, setIsUrlTarget] = useState(false)
   const [detectedPort, setDetectedPort] = useState<string | null>(null)
   const [config, setConfig] = useState<Partial<ScanConfig>>({
-    enable_port_scan: true,
+    // 类别开关
+    enable_category_network: true,
+    enable_category_vuln: true,
+    enable_category_web: true,
+    enable_category_cred: false,
+    enable_category_post_exploit: false,
+    // 网络扫描
+    enable_nmap: true,
+    enable_masscan: true,
+    enable_naabu: true,
+    enable_rustscan: true,
+    enable_httpx: true,
+    enable_whatweb: true,
+    enable_katana: true,
+    // 漏洞扫描
     enable_nuclei: true,
     enable_nikto: true,
-    enable_gobuster: true,
+    enable_wapiti: true,
+    enable_trivy: true,
+    enable_grype: true,
+    enable_lynis: true,
+    enable_searchsploit: true,
+    enable_yara: true,
+    // Web 测试
     enable_sqlmap: true,
-    enable_whatweb: true,
+    enable_ffuf: true,
+    enable_dirsearch: true,
+    enable_gobuster: true,
+    enable_feroxbuster: true,
+    enable_wfuzz: true,
+    enable_dalfox: true,
+    enable_xsstrike: true,
+    enable_commix: true,
+    enable_jwt_tool: true,
+    enable_newman: true,
     enable_sslscan: true,
+    // 凭证测试（默认禁用）
+    enable_hydra: false,
+    enable_medusa: false,
+    enable_netexec: false,
+    enable_cewl: false,
+    enable_kerbrute: false,
+    enable_enum4linux: false,
+    // 后渗透（默认禁用）
+    enable_gitleaks: false,
+    enable_trufflehog: false,
+    enable_pspy: false,
+    enable_linpeas: false,
+    enable_linenum: false,
+    enable_linux_exploit_suggester: false,
+    // 通用配置
     enable_sub_agents: true,
     scan_depth: 3,
     rate_limit: 10,
-    ai_max_iterations: 0,  // 0 表示无限制
+    ai_max_iterations: 0,
     ai_custom_prompt: '',
-    ai_persona_id: null,  // 在 personas 加载后会自动设置为默认人格
+    ai_persona_id: null,
   })
 
   // 目标历史记录管理
@@ -258,99 +302,210 @@ export default function NewScan() {
 
         {/* Custom Options */}
         {scanType === 'custom' && (
-          <div className="space-y-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_port_scan}
-                onChange={e => setConfig({ ...config, enable_port_scan: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span className="flex-1">
-                启用端口扫描 (Nmap)
-                {isUrlTarget && !config.enable_port_scan && (
-                  <span className="ml-2 text-xs text-blue-500">(URL 模式已自动禁用)</span>
-                )}
-              </span>
-            </label>
+          <div className="space-y-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            {/* 网络扫描与资产识别 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.enable_category_network}
+                  onChange={e => setConfig({ ...config, enable_category_network: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-semibold text-blue-700 dark:text-blue-400">🌐 网络扫描与资产识别</span>
+                <span className="text-xs text-gray-500 ml-auto">目标发现、端口识别、服务指纹</span>
+              </div>
+              {config.enable_category_network && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  {[
+                    { key: 'enable_nmap', name: 'Nmap', desc: '端口扫描、服务版本检测' },
+                    { key: 'enable_masscan', name: 'Masscan', desc: '超快速端口扫描' },
+                    { key: 'enable_naabu', name: 'Naabu', desc: '快速端口发现' },
+                    { key: 'enable_rustscan', name: 'RustScan', desc: 'Rust 编写的快速扫描器' },
+                    { key: 'enable_httpx', name: 'httpx', desc: 'HTTP 探测与指纹' },
+                    { key: 'enable_whatweb', name: 'WhatWeb', desc: 'Web 技术栈识别' },
+                    { key: 'enable_katana', name: 'Katana', desc: 'Web 爬虫/URL 发现' },
+                  ].map(tool => (
+                    <label key={tool.key} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={config[tool.key as keyof ScanConfig] as boolean}
+                        onChange={e => setConfig({ ...config, [tool.key]: e.target.checked })}
+                        className="w-3.5 h-3.5 mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{tool.name}</span>
+                        <span className="block text-xs text-gray-500">{tool.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_nuclei}
-                onChange={e => setConfig({ ...config, enable_nuclei: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用漏洞扫描 (Nuclei)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">模板化漏洞检测，覆盖 CVE、 RCE 等</span>
-              </span>
-            </label>
+            {/* 漏洞扫描与组件分析 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.enable_category_vuln}
+                  onChange={e => setConfig({ ...config, enable_category_vuln: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-semibold text-red-700 dark:text-red-400">🛡️ 漏洞扫描与组件分析</span>
+                <span className="text-xs text-gray-500 ml-auto">规则扫描、漏洞匹配、组件检查</span>
+              </div>
+              {config.enable_category_vuln && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  {[
+                    { key: 'enable_nuclei', name: 'Nuclei', desc: '模板化漏洞检测' },
+                    { key: 'enable_nikto', name: 'Nikto', desc: 'Web 服务器漏洞扫描' },
+                    { key: 'enable_wapiti', name: 'Wapiti', desc: 'Web 应用漏洞扫描' },
+                    { key: 'enable_trivy', name: 'Trivy', desc: '容器/依赖漏洞扫描' },
+                    { key: 'enable_grype', name: 'Grype', desc: '依赖漏洞扫描' },
+                    { key: 'enable_lynis', name: 'Lynis', desc: '系统安全审计' },
+                    { key: 'enable_searchsploit', name: 'SearchSploit', desc: '漏洞利用数据库' },
+                    { key: 'enable_yara', name: 'YARA', desc: '恶意软件规则匹配' },
+                  ].map(tool => (
+                    <label key={tool.key} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={config[tool.key as keyof ScanConfig] as boolean}
+                        onChange={e => setConfig({ ...config, [tool.key]: e.target.checked })}
+                        className="w-3.5 h-3.5 mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{tool.name}</span>
+                        <span className="block text-xs text-gray-500">{tool.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_nikto}
-                onChange={e => setConfig({ ...config, enable_nikto: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用 Web 漏洞扫描 (Nikto)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">Web 服务器漏洞、配置错误检测</span>
-              </span>
-            </label>
+            {/* Web/API 测试 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.enable_category_web}
+                  onChange={e => setConfig({ ...config, enable_category_web: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-semibold text-purple-700 dark:text-purple-400">💻 Web/API 测试</span>
+                <span className="text-xs text-gray-500 ml-auto">Web 枚举、参数变异、API 测试</span>
+              </div>
+              {config.enable_category_web && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  {[
+                    { key: 'enable_sqlmap', name: 'SQLMap', desc: 'SQL 注入检测' },
+                    { key: 'enable_ffuf', name: 'ffuf', desc: 'Web Fuzzer' },
+                    { key: 'enable_dirsearch', name: 'Dirsearch', desc: '目录扫描' },
+                    { key: 'enable_gobuster', name: 'Gobuster', desc: '目录/文件枚举' },
+                    { key: 'enable_feroxbuster', name: 'Feroxbuster', desc: '递归目录扫描' },
+                    { key: 'enable_wfuzz', name: 'Wfuzz', desc: 'Web Fuzzer' },
+                    { key: 'enable_dalfox', name: 'Dalfox', desc: 'XSS 扫描' },
+                    { key: 'enable_xsstrike', name: 'XSStrike', desc: 'XSS 检测' },
+                    { key: 'enable_commix', name: 'Commix', desc: '命令注入检测' },
+                    { key: 'enable_jwt_tool', name: 'JWT Tool', desc: 'JWT 分析/测试' },
+                    { key: 'enable_newman', name: 'Newman', desc: 'Postman 运行器' },
+                    { key: 'enable_sslscan', name: 'SSLScan', desc: 'SSL/TLS 分析' },
+                  ].map(tool => (
+                    <label key={tool.key} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={config[tool.key as keyof ScanConfig] as boolean}
+                        onChange={e => setConfig({ ...config, [tool.key]: e.target.checked })}
+                        className="w-3.5 h-3.5 mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{tool.name}</span>
+                        <span className="block text-xs text-gray-500">{tool.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_gobuster}
-                onChange={e => setConfig({ ...config, enable_gobuster: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用目录枚举 (Gobuster)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">发现隐藏目录、文件和敏感路径</span>
-              </span>
-            </label>
+            {/* 凭证与身份验证 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.enable_category_cred}
+                  onChange={e => setConfig({ ...config, enable_category_cred: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-semibold text-orange-700 dark:text-orange-400">🔑 凭证与身份验证</span>
+                <span className="text-xs text-red-500 ml-auto">⚠️ 仅限授权环境</span>
+              </div>
+              {config.enable_category_cred && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  {[
+                    { key: 'enable_hydra', name: 'Hydra', desc: '暴力破解工具' },
+                    { key: 'enable_medusa', name: 'Medusa', desc: '并行暴力破解' },
+                    { key: 'enable_netexec', name: 'NetExec', desc: '网络执行工具' },
+                    { key: 'enable_cewl', name: 'CeWL', desc: '自定义字典生成' },
+                    { key: 'enable_kerbrute', name: 'Kerbrute', desc: 'Kerberos 枚举' },
+                    { key: 'enable_enum4linux', name: 'Enum4linux', desc: 'SMB/NetBIOS 枚举' },
+                  ].map(tool => (
+                    <label key={tool.key} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={config[tool.key as keyof ScanConfig] as boolean}
+                        onChange={e => setConfig({ ...config, [tool.key]: e.target.checked })}
+                        className="w-3.5 h-3.5 mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{tool.name}</span>
+                        <span className="block text-xs text-gray-500">{tool.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_sqlmap}
-                onChange={e => setConfig({ ...config, enable_sqlmap: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用 SQL 注入检测 (SQLMap)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">自动化 SQL 注入漏洞检测</span>
-              </span>
-            </label>
-
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_whatweb}
-                onChange={e => setConfig({ ...config, enable_whatweb: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用 Web 指纹识别 (WhatWeb)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">识别 CMS、框架、技术栈</span>
-              </span>
-            </label>
-
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={config.enable_sslscan}
-                onChange={e => setConfig({ ...config, enable_sslscan: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>
-                启用 SSL/TLS 分析 (SSLScan)
-                <span className="block text-xs text-gray-500 dark:text-gray-400">检测弱加密、过期证书、协议漏洞</span>
-              </span>
-            </label>
+            {/* 后渗透与取证辅助 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.enable_category_post_exploit}
+                  onChange={e => setConfig({ ...config, enable_category_post_exploit: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-semibold text-gray-700 dark:text-gray-400">🔍 后渗透与取证辅助</span>
+                <span className="text-xs text-red-500 ml-auto">⚠️ 仅限授权环境</span>
+              </div>
+              {config.enable_category_post_exploit && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  {[
+                    { key: 'enable_gitleaks', name: 'Gitleaks', desc: 'Git 敏感信息扫描' },
+                    { key: 'enable_trufflehog', name: 'TruffleHog', desc: '敏感信息扫描' },
+                    { key: 'enable_pspy', name: 'pspy', desc: '进程监控' },
+                    { key: 'enable_linpeas', name: 'LinPEAS', desc: 'Linux 权限提升检查' },
+                    { key: 'enable_linenum', name: 'LinEnum', desc: 'Linux 枚举工具' },
+                    { key: 'enable_linux_exploit_suggester', name: 'LES', desc: '内核漏洞建议' },
+                  ].map(tool => (
+                    <label key={tool.key} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={config[tool.key as keyof ScanConfig] as boolean}
+                        onChange={e => setConfig({ ...config, [tool.key]: e.target.checked })}
+                        className="w-3.5 h-3.5 mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{tool.name}</span>
+                        <span className="block text-xs text-gray-500">{tool.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div>
               <label className="block text-sm mb-1">速率限制 (请求/秒)</label>

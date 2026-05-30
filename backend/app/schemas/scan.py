@@ -15,24 +15,70 @@ class ScanConfig(BaseModel):
         description="使用 LLM 自动选择扫描工具（推荐）。关闭后使用手动配置。"
     )
     
-    # 手动工具配置（auto_select_tools=False 时生效）
-    enable_port_scan: bool = True
-    enable_web_scan: bool = True
+    # ======== 扫描类别开关 ========
+    enable_category_network: bool = Field(default=True, description="网络扫描与资产识别")
+    enable_category_vuln: bool = Field(default=True, description="漏洞扫描与组件分析")
+    enable_category_web: bool = Field(default=True, description="Web/API 测试")
+    enable_category_cred: bool = Field(default=False, description="凭证与身份验证（危险）")
+    enable_category_post_exploit: bool = Field(default=False, description="后渗透与取证辅助")
+    
+    # ======== 网络扫描与资产识别 ========
+    enable_nmap: bool = True
+    enable_masscan: bool = True
+    enable_naabu: bool = True
+    enable_rustscan: bool = True
+    enable_httpx: bool = True
+    enable_whatweb: bool = True
+    enable_katana: bool = True
+    
+    # ======== 漏洞扫描与组件分析 ========
     enable_nuclei: bool = True
     enable_nikto: bool = True
-    enable_gobuster: bool = True
+    enable_wapiti: bool = True
+    enable_trivy: bool = True
+    enable_grype: bool = True
+    enable_lynis: bool = True
+    enable_searchsploit: bool = True
+    enable_yara: bool = True
+    
+    # ======== Web/API 测试 ========
     enable_sqlmap: bool = True
-    enable_whatweb: bool = True
+    enable_ffuf: bool = True
+    enable_dirsearch: bool = True
+    enable_gobuster: bool = True
+    enable_feroxbuster: bool = True
+    enable_wfuzz: bool = True
+    enable_dalfox: bool = True
+    enable_xsstrike: bool = True
+    enable_commix: bool = True
+    enable_jwt_tool: bool = True
+    enable_newman: bool = True
     enable_sslscan: bool = True
     
-    # AI Agent 配置
+    # ======== 凭证与身份验证（默认禁用）========
+    enable_hydra: bool = False
+    enable_medusa: bool = False
+    enable_netexec: bool = False
+    enable_cewl: bool = False
+    enable_kerbrute: bool = False
+    enable_enum4linux: bool = False
+    
+    # ======== 后渗透与取证辅助（默认禁用）========
+    enable_gitleaks: bool = False
+    enable_trufflehog: bool = False
+    enable_pspy: bool = False
+    enable_linpeas: bool = False
+    enable_linenum: bool = False
+    enable_linux_exploit_suggester: bool = False
+    
+    # ======== AI Agent 配置 ========
     enable_ai_agent: bool = True
-    enable_sub_agents: bool = Field(default=True, description="启用 SubAgent 任务编排")
+    enable_sub_agents: bool = Field(default=True, description="启用子智能体任务编排")
     ai_max_iterations: int = Field(default=0, ge=0, description="AI Agent 最大迭代次数，0 表示无限制")
     ai_custom_prompt: str | None = Field(default=None, description="AI Agent 自定义提示词")
     ai_persona_id: str | None = Field(default=None, description="AI 人格 ID，为空则使用默认人格")
     
-    # 扫描参数
+    # ======== 扫描参数 ========
     custom_ports: list[int] = []
     scan_depth: int = Field(default=3, ge=1, le=10)
     rate_limit: int = Field(default=10, ge=1, le=100)  # req/s

@@ -9,12 +9,66 @@ from pathlib import Path
 
 
 class ScannerType(str, Enum):
+    # 网络扫描与资产识别
     NMAP = "nmap"
+    MASSCAN = "masscan"
+    NAABU = "naabu"
+    RUSTSCAN = "rustscan"
+    HTTPX = "httpx"
+    WHATWEB = "whatweb"
+    KATANA = "katana"
+    
+    # 漏洞扫描与组件分析
     NUCLEI = "nuclei"
     NIKTO = "nikto"
-    GOBUSTER = "gobuster"
+    WAPITI = "wapiti"
+    TRIVY = "trivy"
+    GRYPE = "grype"
+    SCOUTSUITE = "scoutsuite"
+    LYNIS = "lynis"
+    OSV_SCANNER = "osv-scanner"
+    SEARCHSPLOIT = "searchsploit"
+    YARA = "yara"
+    
+    # Web/API 测试
+    OWASP_ZAP = "owasp-zap"
     SQLMAP = "sqlmap"
-    WHATWEB = "whatweb"
+    FFUF = "ffuf"
+    DIRSEARCH = "dirsearch"
+    GOBUSTER = "gobuster"
+    FEROXBUSTER = "feroxbuster"
+    WFUZZ = "wfuzz"
+    DALFOX = "dalfox"
+    XSSTRIKE = "xsstrike"
+    COMMIX = "commix"
+    JWT_TOOL = "jwt_tool"
+    NEWMAN = "newman"
+    
+    # 凭证与身份验证
+    HYDRA = "hydra"
+    MEDUSA = "medusa"
+    PATATOR = "patator"
+    CROWBAR = "crowbar"
+    NETEXEC = "netexec"
+    CEWL = "cewl"
+    JOHN = "john"
+    HASHCAT = "hashcat"
+    KERBRUTE = "kerbrute"
+    ENUM4LINUX = "enum4linux-ng"
+    
+    # 后渗透与取证辅助
+    LINPEAS = "linpeas"
+    WINPEAS = "winpeas"
+    LINENUM = "linenum"
+    LINUX_EXPLOIT_SUGGESTER = "linux-exploit-suggester"
+    WINDOWS_EXPLOIT_SUGGESTER = "windows-exploit-suggester"
+    SEATBELT = "seatbelt"
+    PSY = "pspy"
+    VOLATILITY = "volatility"
+    GITLEAKS = "gitleaks"
+    TRUFFLEHOG = "trufflehog"
+    
+    # 通用
     SSLSCAN = "sslscan"
     WEB = "web"
     CUSTOM = "custom"

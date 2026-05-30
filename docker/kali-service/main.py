@@ -91,38 +91,69 @@ KALI_METAPACKAGES = {
 
 # 工具到包名的映射
 TOOL_PACKAGES = {
+    # 网络扫描与资产识别
     "nmap": ["nmap"],
     "masscan": ["masscan"],
+    "naabu": [],  # Go 安装
+    "rustscan": [],  # 特殊安装
+    "httpx": [],  # Go 安装
+    "whatweb": ["whatweb"],
+    "katana": [],  # Go 安装
+    
+    # 漏洞扫描与组件分析
     "nuclei": [],  # 特殊安装
     "nikto": ["nikto"],
-    "dirb": ["dirb"],
-    "gobuster": ["gobuster"],
-    "wfuzz": ["wfuzz"],
-    "ffuf": [],  # 特殊安装
+    "wapiti": ["wapiti"],
+    "trivy": [],  # 特殊安装
+    "grype": [],  # 特殊安装
+    "lynis": ["lynis"],
+    "searchsploit": [],  # Git 安装
+    "yara": ["yara"],
+    
+    # Web/API 测试
     "sqlmap": ["sqlmap"],
+    "ffuf": [],  # Go 安装
+    "dirsearch": [],  # pip 安装
+    "gobuster": [],  # Go 安装
+    "feroxbuster": [],  # Go 安装
+    "wfuzz": ["wfuzz"],
+    "dalfox": [],  # Go 安装
+    "xsstrike": [],  # Git 安装
+    "commix": [],  # Git 安装
+    "jwt_tool": [],  # Git 安装
+    "newman": [],  # npm 安装
     "sslscan": ["sslscan"],
-    "testssl": [],  # 特殊安装
-    "whatweb": ["whatweb"],
-    "wafw00f": ["wafw00f"],
-    "sublist3r": ["sublist3r"],
-    "subfinder": [],  # 特殊安装
-    "httpx": [],  # 特殊安装
-    "amass": ["amass"],
-    "dnsenum": ["dnsenum"],
-    "fierce": ["fierce"],
-    "theharvester": ["theharvester"],
-    "maltego": ["maltego"],
-    "recon-ng": ["recon-ng"],
+    "dirb": ["dirb"],
+    
+    # 凭证与身份验证
     "hydra": ["hydra"],
+    "medusa": ["medusa"],
+    "patator": [],  # pip 安装
+    "crowbar": ["crowbar"],
+    "netexec": [],  # pip 安装
+    "cewl": ["cewl"],
     "john": ["john"],
     "hashcat": ["hashcat"],
+    "kerbrute": [],  # 特殊安装
+    "enum4linux-ng": [],  # Git 安装
+    
+    # 后渗透与取证辅助
+    "linpeas": [],  # 特殊安装
+    "winpeas": [],  # 特殊安装
+    "linenum": [],  # Git 安装
+    "linux-exploit-suggester": [],  # Git 安装
+    "pspy": [],  # 特殊安装
+    "gitleaks": [],  # 特殊安装
+    "trufflehog": [],  # pip 安装
+    
+    # 其他工具
     "metasploit": ["metasploit-framework"],
-    "burpsuite": ["burpsuite"],
-    "zaproxy": ["zaproxy"],
-    "wireshark": ["wireshark"],
-    "tshark": ["tshark"],
-    "tcpdump": ["tcpdump"],
-    "aircrack-ng": ["aircrack-ng"],
+    "subfinder": [],  # Go 安装
+    "amass": ["amass"],
+    "dnsenum": ["dnsenum"],
+    "theharvester": ["theharvester"],
+    "john": ["john"],
+    "hashcat": ["hashcat"],
 }
 
 # 安装状态缓存
