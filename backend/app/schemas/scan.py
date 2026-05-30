@@ -99,6 +99,7 @@ class ScanLogEntry(BaseModel):
     message: str
     details: str | None = None
     tool: str | None = None
+    agent: str | None = None
 
 
 class ScanLogsResponse(BaseModel):

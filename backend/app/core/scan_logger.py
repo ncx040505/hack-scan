@@ -37,7 +37,7 @@ class ScanLogger:
             self._client = redis.from_url(self.redis_url, decode_responses=True)
         return self._client
     
-    def log(self, log_type: LogType, message: str, details: str = None, tool: str = None):
+    def log(self, log_type: LogType, message: str, details: str = None, tool: str = None, agent: str = None):
         """添加一条日志"""
         entry = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -45,6 +45,7 @@ class ScanLogger:
             "message": message,
             "details": details,
             "tool": tool,
+            "agent": agent,
         }
         
         # 添加到 Redis list
@@ -56,23 +57,23 @@ class ScanLogger:
         # 设置过期时间
         self.client.expire(self._log_key, self._expire_seconds)
     
-    def info(self, message: str, details: str = None):
-        self.log(LogType.INFO, message, details)
+    def info(self, message: str, details: str = None, agent: str = None):
+        self.log(LogType.INFO, message, details, agent=agent)
     
-    def tool(self, tool_name: str, message: str, output: str = None):
-        self.log(LogType.TOOL, message, output, tool=tool_name)
+    def tool(self, tool_name: str, message: str, output: str = None, agent: str = None):
+        self.log(LogType.TOOL, message, output, tool=tool_name, agent=agent)
     
-    def output(self, tool_name: str, message: str, details: str = None):
-        self.log(LogType.OUTPUT, message, details, tool=tool_name)
+    def output(self, tool_name: str, message: str, details: str = None, agent: str = None):
+        self.log(LogType.OUTPUT, message, details, tool=tool_name, agent=agent)
     
-    def llm(self, message: str, response: str = None):
-        self.log(LogType.LLM, message, response)
+    def llm(self, message: str, response: str = None, agent: str = None):
+        self.log(LogType.LLM, message, response, agent=agent)
     
-    def error(self, message: str, details: str = None):
-        self.log(LogType.ERROR, message, details)
+    def error(self, message: str, details: str = None, agent: str = None):
+        self.log(LogType.ERROR, message, details, agent=agent)
     
-    def success(self, message: str, details: str = None):
-        self.log(LogType.SUCCESS, message, details)
+    def success(self, message: str, details: str = None, agent: str = None):
+        self.log(LogType.SUCCESS, message, details, agent=agent)
     
     def get_logs(self, since_index: int = 0) -> tuple[list[dict], int]:
         """获取日志，返回 (logs, next_index)"""

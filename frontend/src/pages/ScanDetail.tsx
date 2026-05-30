@@ -139,6 +139,7 @@ export default function ScanDetail() {
 
   const isActive = scan.status === 'RUNNING' || scan.status === 'PENDING' || scan.status === 'PAUSED'
   const canDelete = scan.status === 'COMPLETED' || scan.status === 'CANCELLED' || scan.status === 'FAILED'
+  const displayProgress = getDisplayProgress(progress, subAgents, scan)
 
   return (
     <div>
@@ -220,37 +221,37 @@ export default function ScanDetail() {
                 {scan.status === 'PENDING' ? '等待执行' : '扫描进行中'}
               </h2>
               <p className="text-gray-500 dark:text-gray-400 text-sm">
-                {progress?.message || '正在处理...'}
+                {displayProgress.message}
               </p>
             </div>
           </div>
-          {progress?.phase && (
+          {displayProgress.phase && (
             <div className="mt-4">
               <div className="flex gap-2 text-sm">
                 <ProgressStep
                   label="初始化"
-                  active={progress.phase === 'initializing' || progress.phase === 'queued'}
-                  done={['running_nmap', 'running_nuclei', 'ai_agent', 'llm_analysis', 'COMPLETED'].includes(progress.phase || '')}
+                  active={displayProgress.phase === 'initializing' || displayProgress.phase === 'queued'}
+                  done={['parallel_sub_agents', 'running_nmap', 'running_nuclei', 'ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '')}
                 />
                 <ProgressStep
                   label="端口扫描"
-                  active={progress.phase === 'running_nmap'}
-                  done={['running_nuclei', 'ai_agent', 'llm_analysis', 'COMPLETED'].includes(progress.phase || '')}
+                  active={displayProgress.phase === 'running_nmap' || displayProgress.phase === 'parallel_sub_agents'}
+                  done={['ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'recon-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="漏洞扫描"
-                  active={progress.phase === 'running_nuclei'}
-                  done={['ai_agent', 'llm_analysis', 'COMPLETED'].includes(progress.phase || '')}
+                  active={displayProgress.phase === 'running_nuclei' || displayProgress.phase === 'parallel_sub_agents'}
+                  done={['ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'vulnerability-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="AI 测试"
-                  active={progress.phase === 'ai_agent'}
-                  done={['llm_analysis', 'COMPLETED'].includes(progress.phase || '')}
+                  active={displayProgress.phase === 'ai_agent'}
+                  done={['llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'ai-validation-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="AI 分析"
-                  active={progress.phase === 'llm_analysis'}
-                  done={progress.phase === 'COMPLETED'}
+                  active={displayProgress.phase === 'llm_analysis'}
+                  done={displayProgress.phase === 'completed' || subAgents.some(agent => agent.id === 'reporting-subagent' && agent.status === 'completed')}
                 />
               </div>
             </div>
@@ -353,9 +354,45 @@ const subAgentStatusStyles: Record<string, string> = {
   skipped: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 }
 
+function getDisplayProgress(progress: any, subAgents: SubAgentTask[], scan: any): { phase: string | null; message: string } {
+  const runningAgents = subAgents.filter(agent => agent.status === 'running' || agent.status === 'waiting_input')
+  const byId = Object.fromEntries(subAgents.map(agent => [agent.id, agent]))
+
+  if (runningAgents.length > 0) {
+    const runningNames = runningAgents.map(agent => agent.name).join('、')
+    const hasParallelInitialScan = runningAgents.some(agent => ['recon-subagent', 'vulnerability-subagent'].includes(agent.id))
+    return {
+      phase: hasParallelInitialScan ? 'parallel_sub_agents' : runningAgents[0].phase || progress?.phase || 'running',
+      message: `SubAgent 执行中：${runningNames}`,
+    }
+  }
+
+  if (byId['reporting-subagent']?.status === 'completed' || scan?.status === 'COMPLETED') {
+    return { phase: 'completed', message: 'SubAgent 编排完成' }
+  }
+  if (byId['ai-validation-subagent']?.status === 'completed') {
+    return { phase: 'llm_analysis', message: 'Reporting SubAgent 正在生成报告...' }
+  }
+  if (byId['vulnerability-subagent']?.status === 'completed') {
+    return { phase: 'ai_agent', message: 'AI Validation SubAgent 正在验证发现...' }
+  }
+  if (byId['recon-subagent']?.status === 'completed') {
+    return { phase: 'running_nuclei', message: 'Vulnerability SubAgent 正在验证漏洞...' }
+  }
+
+  return {
+    phase: progress?.phase || null,
+    message: progress?.message || '主 Agent 正在编排 SubAgent...',
+  }
+}
+
 function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): SubAgentTask[] {
   const fromApi = progress?.sub_agents?.length ? progress.sub_agents : scan?.sub_agents
-  if (fromApi?.length) return fromApi
+  const apiLooksStale = fromApi?.length && (
+    fromApi.every((agent: SubAgentTask) => agent.status === 'queued' && (agent.progress || 0) === 0)
+    || (scan?.status === 'COMPLETED' && fromApi.every((agent: SubAgentTask) => agent.status !== 'completed'))
+  )
+  if (fromApi?.length && !apiLooksStale) return fromApi
 
   const hasNmap = logs.some(log => log.tool?.toLowerCase() === 'nmap' || log.message.toLowerCase().includes('nmap'))
   const nmapDone = logs.some(log => log.message.includes('NMAP 扫描完成'))
@@ -404,7 +441,7 @@ function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): Su
       name: 'AI Validation SubAgent',
       role: '自主安全测试与发现验证',
       objective: '基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。',
-      status: statusFromLogs(hasAi, scan?.status === 'COMPLETED' && hasAi),
+      status: statusFromLogs(hasAi, (scan?.status === 'COMPLETED' && hasAi) || logs.some(log => log.message.includes('AI Agent 发现') || log.message.includes('AI Validation SubAgent'))),
       phase: hasAi ? 'ai_agent' : null,
       progress: scan?.status === 'COMPLETED' && hasAi ? 100 : hasAi ? 70 : 0,
       started_at: null,
@@ -418,7 +455,7 @@ function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): Su
       name: 'Reporting SubAgent',
       role: '风险归纳与报告生成',
       objective: '汇总各 SubAgent 输出，生成风险评分、修复建议与攻击路径。',
-      status: statusFromLogs(hasReport, scan?.status === 'COMPLETED'),
+      status: statusFromLogs(hasReport || scan?.status === 'COMPLETED', scan?.status === 'COMPLETED'),
       phase: hasReport ? 'llm_analysis' : null,
       progress: scan?.status === 'COMPLETED' ? 100 : hasReport ? 60 : 0,
       started_at: null,
@@ -936,8 +973,8 @@ function TabAttackPath({ scan, vulns }: { scan: any; vulns: any }) {
             <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${risk_assessment.risk_score >= 80 ? 'bg-red-500' :
-                    risk_assessment.risk_score >= 60 ? 'bg-orange-500' :
-                      risk_assessment.risk_score >= 40 ? 'bg-yellow-500' : 'bg-green-500'
+                  risk_assessment.risk_score >= 60 ? 'bg-orange-500' :
+                    risk_assessment.risk_score >= 40 ? 'bg-yellow-500' : 'bg-green-500'
                   }`}
                 style={{ width: `${risk_assessment.risk_score}%` }}
               />
@@ -1151,10 +1188,10 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
   const fallbackSummary = actualVulns.length === 0
     ? `已完成对 ${scan.target} 的安全扫描，未发现明显漏洞。`
     : (
-        `已完成对 ${scan.target} 的安全扫描，发现 ${actualVulns.length} 个安全问题，`
-        + `其中严重 ${criticalVulns.length} 个、高危 ${highVulns.length} 个。`
-        + '建议优先处理高风险问题并安排复测。'
-      )
+      `已完成对 ${scan.target} 的安全扫描，发现 ${actualVulns.length} 个安全问题，`
+      + `其中严重 ${criticalVulns.length} 个、高危 ${highVulns.length} 个。`
+      + '建议优先处理高风险问题并安排复测。'
+    )
   const summaryText: string = (scan.llm_summary?.trim() || fallbackSummary)
     .replace(/^#+\s*/gm, '')
     .replace(/^\s*[-*]\s+/gm, '')
@@ -1184,7 +1221,7 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
     setExportMenuOpen(false)
     setIsExporting(true)
     setExportFormat(format)
-    
+
     try {
       const reportData = {
         scan: {
@@ -1273,27 +1310,24 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
             {scan.llm_risk_score !== null && scan.llm_risk_score !== undefined && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className={`w-6 h-6 ${
-                    scan.llm_risk_score >= 80 ? 'text-red-500' :
-                    scan.llm_risk_score >= 60 ? 'text-orange-500' :
-                    scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
-                  }`} />
+                  <AlertTriangle className={`w-6 h-6 ${scan.llm_risk_score >= 80 ? 'text-red-500' :
+                      scan.llm_risk_score >= 60 ? 'text-orange-500' :
+                        scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
+                    }`} />
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">风险评分</p>
-                    <p className={`text-2xl font-bold ${
-                      scan.llm_risk_score >= 80 ? 'text-red-500' :
-                      scan.llm_risk_score >= 60 ? 'text-orange-500' :
-                      scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
-                    }`}>{scan.llm_risk_score}/100</p>
+                    <p className={`text-2xl font-bold ${scan.llm_risk_score >= 80 ? 'text-red-500' :
+                        scan.llm_risk_score >= 60 ? 'text-orange-500' :
+                          scan.llm_risk_score >= 40 ? 'text-yellow-500' : 'text-green-500'
+                      }`}>{scan.llm_risk_score}/100</p>
                   </div>
                 </div>
                 <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-500 ${
-                      scan.llm_risk_score >= 80 ? 'bg-red-500' :
-                      scan.llm_risk_score >= 60 ? 'bg-orange-500' :
-                      scan.llm_risk_score >= 40 ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
+                    className={`h-full transition-all duration-500 ${scan.llm_risk_score >= 80 ? 'bg-red-500' :
+                        scan.llm_risk_score >= 60 ? 'bg-orange-500' :
+                          scan.llm_risk_score >= 40 ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
                     style={{ width: `${scan.llm_risk_score}%` }}
                   />
                 </div>
@@ -1338,18 +1372,18 @@ function TabReport({ scan, vulns }: { scan: any; vulns: any }) {
                 </button>
                 {exportMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-                  {['markdown', 'html', 'json', 'csv'].map(fmt => (
-                    <button
-                      key={fmt}
-                      onClick={() => handleExport(fmt)}
-                      disabled={isExporting}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
-                    >
-                      <FileText className="w-4 h-4" />
-                      {fmt.toUpperCase()}
-                      {isExporting && exportFormat === fmt && <Loader2 className="w-4 h-4 animate-spin" />}
-                    </button>
-                  ))}
+                    {['markdown', 'html', 'json', 'csv'].map(fmt => (
+                      <button
+                        key={fmt}
+                        onClick={() => handleExport(fmt)}
+                        disabled={isExporting}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        <FileText className="w-4 h-4" />
+                        {fmt.toUpperCase()}
+                        {isExporting && exportFormat === fmt && <Loader2 className="w-4 h-4 animate-spin" />}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1556,12 +1590,12 @@ function generateHTMLReport(data: any): string {
 function TabRemediation({ scanId, scan, vulns }: { scanId: string; scan: any; vulns: any }) {
   const actualVulns = vulns?.items.filter((v: Vulnerability) => !v.name.startsWith('Open port:')) || []
   const vulnsWithRemediation = actualVulns.filter((v: Vulnerability) => v.llm_remediation)
-  
+
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 5
   const totalPages = Math.ceil(vulnsWithRemediation.length / pageSize)
-  
+
   // 当前页的漏洞
   const paginatedVulns = useMemo(() => {
     const start = (currentPage - 1) * pageSize
@@ -1762,7 +1796,7 @@ function TabRemediation({ scanId, scan, vulns }: { scanId: string; scan: any; vu
               </div>
             ))}
           </div>
-          
+
           {/* 分页控件 */}
           {totalPages > 1 && (
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -1846,7 +1880,8 @@ function RemediationChatDialog({
 
     setMessages([
       { role: 'user', content: initMessage },
-      { role: 'assistant', content: `正在分析漏洞 "${vuln.name}"...
+      {
+        role: 'assistant', content: `正在分析漏洞 "${vuln.name}"...
 
 根据漏洞信息，以下是修复建议：
 
@@ -1919,11 +1954,10 @@ ${vuln.llm_remediation || '暂无自动生成的修复建议，我会根据漏�
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  msg.role === 'user'
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${msg.role === 'user'
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                }`}
+                  }`}
               >
                 <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
               </div>
@@ -2051,8 +2085,8 @@ function VulnRow({ vuln }: { vuln: Vulnerability }) {
 function ProgressStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
   return (
     <div className={`flex-1 text-center py-2 px-3 rounded ${done ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400' :
-        active ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' :
-          'bg-gray-200 dark:bg-gray-700 text-gray-500'
+      active ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' :
+        'bg-gray-200 dark:bg-gray-700 text-gray-500'
       }`}>
       {done ? '✓ ' : active ? '● ' : '○ '}{label}
     </div>
@@ -2098,6 +2132,7 @@ function LogEntry({ log }: { log: ScanLogEntry }) {
   const config = typeConfig[log.type] || typeConfig.info
   const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
   const hasDetails = log.details && log.details.length > 0
+  const agentLabel = log.agent || inferAgentFromLog(log)
 
   return (
     <div className={`rounded px-3 py-2 ${config.bg}`}>
@@ -2109,6 +2144,12 @@ function LogEntry({ log }: { log: ScanLogEntry }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-gray-500 text-xs">{time}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${agentLabel === '主 Agent'
+              ? 'bg-purple-600 text-white'
+              : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+            }`}>
+              {agentLabel}
+            </span>
             {log.tool && (
               <span className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300">
                 {log.tool}
@@ -2131,6 +2172,17 @@ function LogEntry({ log }: { log: ScanLogEntry }) {
       )}
     </div>
   )
+}
+
+function inferAgentFromLog(log: ScanLogEntry): string {
+  const tool = log.tool?.toLowerCase()
+  const message = log.message.toLowerCase()
+  if (message.includes('主 agent')) return '主 Agent'
+  if (tool === 'nmap' || message.includes('nmap')) return 'Recon SubAgent'
+  if (tool === 'nuclei' || message.includes('nuclei')) return 'Vulnerability SubAgent'
+  if (log.type === 'llm' || message.includes('ai agent') || message.includes('迭代') || message.includes('分析')) return 'AI Validation SubAgent'
+  if (message.includes('报告') || message.includes('风险评分') || message.includes('攻击路径')) return 'Reporting SubAgent'
+  return '主 Agent'
 }
 
 function AgentQuestionPanel({ scanId }: { scanId: string }) {
@@ -2189,8 +2241,8 @@ function AgentQuestionPanel({ scanId }: { scanId: string }) {
             <div
               key={msg.id}
               className={`p-3 rounded-lg ${msg.role === 'agent'
-                  ? 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
-                  : 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 ml-8'
+                ? 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                : 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 ml-8'
                 }`}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -2317,8 +2369,8 @@ function ScanChatPanel({ scanId }: { scanId: string }) {
                   className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
                   <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user'
-                      ? 'bg-blue-100 dark:bg-blue-900'
-                      : 'bg-purple-100 dark:bg-purple-900'
+                    ? 'bg-blue-100 dark:bg-blue-900'
+                    : 'bg-purple-100 dark:bg-purple-900'
                     }`}>
                     {msg.role === 'user' ? (
                       <MessageCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -2327,8 +2379,8 @@ function ScanChatPanel({ scanId }: { scanId: string }) {
                     )}
                   </div>
                   <div className={`max-w-[80%] p-3 rounded-lg ${msg.role === 'user'
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800'
-                      : 'bg-gray-100 dark:bg-gray-700'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800'
+                    : 'bg-gray-100 dark:bg-gray-700'
                     }`}>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-medium text-gray-500">

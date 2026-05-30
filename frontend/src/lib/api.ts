@@ -54,7 +54,7 @@ api.interceptors.response.use(
       message: error.message,
       data: error.response?.data
     })
-    
+
     if (error.response?.status === 401) {
       // Clear auth and redirect to login
       console.error('[API] 401 Unauthorized, clearing auth and redirecting')
@@ -189,6 +189,7 @@ export interface ScanLogEntry {
   message: string
   details: string | null
   tool: string | null
+  agent?: string | null
 }
 
 export interface ScanLogs {

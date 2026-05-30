@@ -45,6 +45,38 @@ def _scan_task_response(task: ScanTask, vulnerability_count: int = 0) -> ScanTas
     )
 
 
+def _progress_from_sub_agents(sub_agents: list[dict]) -> tuple[str | None, str | None]:
+    """根据 SubAgent 状态推导前端进度阶段"""
+    if not sub_agents:
+        return None, None
+
+    by_id = {agent.get("id"): agent for agent in sub_agents}
+    running = [agent for agent in sub_agents if agent.get("status") in {"running", "waiting_input"}]
+    failed = [agent for agent in sub_agents if agent.get("status") == "failed"]
+    completed_count = sum(1 for agent in sub_agents if agent.get("status") == "completed")
+
+    if running:
+        running_names = "、".join(agent.get("name", "SubAgent") for agent in running)
+        phase = running[0].get("phase") or "parallel_sub_agents"
+        if len(running) > 1:
+            phase = "parallel_sub_agents"
+        return phase, f"SubAgent 并行执行中: {running_names}"
+
+    if failed and completed_count < len(sub_agents):
+        return "sub_agent_failed", f"{failed[0].get('name', 'SubAgent')} 执行失败"
+
+    if by_id.get("reporting-subagent", {}).get("status") == "completed":
+        return "completed", "SubAgent 编排完成"
+    if by_id.get("ai-validation-subagent", {}).get("status") == "completed":
+        return "llm_analysis", "Reporting SubAgent 正在生成报告..."
+    if by_id.get("vulnerability-subagent", {}).get("status") == "completed":
+        return "ai_agent", "AI Validation SubAgent 正在验证发现..."
+    if by_id.get("recon-subagent", {}).get("status") == "completed":
+        return "running_nuclei", "Vulnerability SubAgent 正在验证漏洞..."
+
+    return "initializing", "主 Agent 正在编排 SubAgent..."
+
+
 async def get_scan_task_with_access_check(
     scan_id: str,
     current_user: User,
@@ -186,22 +218,29 @@ async def get_scan_progress(
     task = await get_scan_task_with_access_check(scan_id, current_user, db)
     phase = task.status.value.lower()
     message = f"扫描状态: {task.status.value}"
+    sub_agent_phase, sub_agent_message = _progress_from_sub_agents(task.sub_agents or [])
     
     # 从 Celery 获取任务状态
     if task.status == ScanStatus.RUNNING:
-        # 查找关联的 Celery task
-        async_result = celery_app.AsyncResult(f"scan-{scan_id}")
-        if async_result.state == "RUNNING":
-            meta = async_result.info or {}
-            phase = meta.get("phase", "running")
-            
-            phase_messages = {
-                "initializing": "初始化扫描器...",
-                "running_nmap": "正在进行端口扫描 (Nmap)...",
-                "running_nuclei": "正在进行漏洞扫描 (Nuclei)...",
-                "llm_analysis": "AI 正在分析扫描结果...",
-            }
-            message = phase_messages.get(phase, f"执行中: {phase}")
+        if sub_agent_phase:
+            phase = sub_agent_phase
+            message = sub_agent_message or message
+        else:
+            # 查找关联的 Celery task
+            async_result = celery_app.AsyncResult(f"scan-{scan_id}")
+            if async_result.state == "RUNNING":
+                meta = async_result.info or {}
+                phase = meta.get("phase", "running")
+
+                phase_messages = {
+                    "initializing": "初始化扫描器...",
+                    "parallel_sub_agents": "SubAgent 正在并行执行初始扫描...",
+                    "running_nmap": "Recon SubAgent 正在进行端口扫描 (Nmap)...",
+                    "running_nuclei": "Vulnerability SubAgent 正在进行漏洞扫描 (Nuclei)...",
+                    "ai_agent": "AI Validation SubAgent 正在自主验证...",
+                    "llm_analysis": "Reporting SubAgent 正在分析扫描结果...",
+                }
+                message = phase_messages.get(phase, f"执行中: {phase}")
     elif task.status == ScanStatus.PENDING:
         phase = "queued"
         message = "等待执行..."

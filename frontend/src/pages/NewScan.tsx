@@ -238,8 +238,8 @@ export default function NewScan() {
                 type="button"
                 onClick={() => setScanType(type)}
                 className={`px-4 py-3 rounded-lg border transition-colors ${scanType === type
-                    ? 'bg-blue-600 border-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                  ? 'bg-blue-600 border-blue-500 text-white'
+                  : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
                   }`}
               >
                 {name}

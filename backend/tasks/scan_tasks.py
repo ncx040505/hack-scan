@@ -281,9 +281,11 @@ async def _update_sub_agent(
         if not task:
             return
 
-        sub_agents = list(task.sub_agents or [])
-        for sub_agent in sub_agents:
+        updated_sub_agents = []
+        for original_sub_agent in task.sub_agents or []:
+            sub_agent = dict(original_sub_agent)
             if sub_agent.get("id") != agent_id:
+                updated_sub_agents.append(sub_agent)
                 continue
             if status is not None:
                 previous_status = sub_agent.get("status")
@@ -302,9 +304,9 @@ async def _update_sub_agent(
                 sub_agent["findings_count"] = findings_count
             if error is not None:
                 sub_agent["error"] = error
-            break
+            updated_sub_agents.append(sub_agent)
 
-        task.sub_agents = sub_agents
+        task.sub_agents = updated_sub_agents
         await session.commit()
 
 
@@ -582,7 +584,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
     
     # Initialize scan logger
     scan_logger = get_scan_logger(scan_task_id)
-    scan_logger.info("🚀 扫描任务启动", f"目标: {target}, 类型: {scan_type}")
+    scan_logger.info("🚀 主 Agent 启动扫描任务", f"目标: {target}, 类型: {scan_type}", agent="主 Agent")
 
     loop.run_until_complete(_update_scan_status(
         session_factory=session_factory,
@@ -592,7 +594,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
     ))
     
     self.update_state(state="RUNNING", meta={"phase": "initializing"})
-    scan_logger.info("⚙️ 初始化扫描环境")
+    scan_logger.info("⚙️ 主 Agent 初始化扫描环境", agent="主 Agent")
     
     findings = []
     errors = []
@@ -603,8 +605,9 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
         # 确定要运行的扫描器
         available, uploaded_scanners = await get_available_scanners()
         scan_logger.info(
-            "🔍 检测可用扫描器",
+            "🔍 主 Agent 检测可用扫描器",
             f"可用: {[s.value for s in available] + uploaded_scanners}"
+            , agent="主 Agent"
         )
         
         scanners_to_run = []
@@ -614,7 +617,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
             scanners_to_run.append(ScannerType.NUCLEI)
         
         if not scanners_to_run:
-            scan_logger.error("❌ 没有可用的扫描器")
+            scan_logger.error("❌ 主 Agent 未找到可用扫描器", agent="主 Agent")
             errors.append("No scanners available")
             return
         
@@ -624,20 +627,27 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
             scan_logger.info(
                 "🧠 主 Agent 已编排 SubAgent 任务",
                 "\n".join(f"• {agent['name']}: {agent['objective']}" for agent in sub_agent_plan)
+                , agent="主 Agent"
             )
 
-        scan_logger.info("📋 扫描计划", f"将运行: {[s.value for s in scanners_to_run]}")
+        scan_logger.info(
+            "📋 主 Agent 下发并行扫描计划",
+            f"将并行运行: {[s.value for s in scanners_to_run]}",
+            agent="主 Agent"
+        )
         
-        # 逐个运行扫描器
-        for scanner_type in scanners_to_run:
+        async def run_scanner_sub_agent(scanner_type: ScannerType):
+            tool_name = scanner_type.value.upper()
+            sub_agent_id = _scanner_sub_agent_id(scanner_type)
+            sub_agent_name = {
+                "recon-subagent": "Recon SubAgent",
+                "vulnerability-subagent": "Vulnerability SubAgent",
+            }.get(sub_agent_id, f"{tool_name} SubAgent")
             self.update_state(
                 state="RUNNING",
-                meta={"phase": f"running_{scanner_type.value}"}
+                meta={"phase": "parallel_sub_agents", "active_sub_agents": [s.value for s in scanners_to_run]}
             )
-            
-            tool_name = scanner_type.value.upper()
-            scan_logger.tool(tool_name, f"🔧 启动 {tool_name} 扫描器")
-            sub_agent_id = _scanner_sub_agent_id(scanner_type)
+            scan_logger.tool(tool_name, f"🔧 {sub_agent_name} 启动 {tool_name} 扫描器", agent=sub_agent_name)
             if config.get("enable_sub_agents", True):
                 await _update_sub_agent(
                     session_factory,
@@ -646,7 +656,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                     status="running",
                     phase=f"running_{scanner_type.value}",
                     progress=20,
-                    summary=f"主 Agent 已委派 {tool_name} 扫描任务。",
+                    summary=f"{sub_agent_name} 已接收主 Agent 委派，正在执行 {tool_name}。",
                 )
             
             try:
@@ -667,12 +677,13 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                     # 记录每个发现
                     scan_logger.tool(
                         tool_name, 
-                        f"📍 发现: {finding.name}",
-                        f"严重性: {finding.severity}\n位置: {finding.location or 'N/A'}\n{finding.description or ''}"
+                        f"📍 {sub_agent_name} 发现: {finding.name}",
+                        f"严重性: {finding.severity}\n位置: {finding.location or 'N/A'}\n{finding.description or ''}",
+                        agent=sub_agent_name,
                     )
                     logger.debug(f"Found: {finding.name} ({finding.severity})")
                 
-                scan_logger.success(f"✅ {tool_name} 扫描完成", f"发现 {finding_count} 个结果")
+                scan_logger.success(f"✅ {sub_agent_name} 完成 {tool_name} 扫描", f"发现 {finding_count} 个结果", agent=sub_agent_name)
                 if config.get("enable_sub_agents", True):
                     await _update_sub_agent(
                         session_factory,
@@ -681,12 +692,12 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                         status="completed",
                         progress=100,
                         findings_count=finding_count,
-                        summary=f"{tool_name} 子任务完成，发现 {finding_count} 个结果。",
+                        summary=f"{sub_agent_name} 完成 {tool_name} 子任务，发现 {finding_count} 个结果。",
                     )
                 
             except Exception as e:
                 logger.error(f"Scanner {scanner_type} error: {e}")
-                scan_logger.error(f"❌ {tool_name} 扫描出错", str(e))
+                scan_logger.error(f"❌ {sub_agent_name} 执行 {tool_name} 出错", str(e), agent=sub_agent_name)
                 errors.append(f"{scanner_type}: {str(e)}")
                 if config.get("enable_sub_agents", True):
                     await _update_sub_agent(
@@ -696,8 +707,11 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                         status="failed",
                         progress=100,
                         error=str(e),
-                        summary=f"{tool_name} 子任务执行失败。",
+                        summary=f"{sub_agent_name} 执行 {tool_name} 子任务失败。",
                     )
+
+        await asyncio.gather(*(run_scanner_sub_agent(scanner_type) for scanner_type in scanners_to_run))
+        scan_logger.info("🧠 主 Agent 已汇总并行 SubAgent 初扫结果", f"累计发现: {len(findings)}", agent="主 Agent")
     
     llm_summary = None
     risk_score = None
@@ -754,17 +768,17 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 # 创建日志回调
                 async def agent_log_callback(log_type: str, message: str, details: str = None, tool: str = None):
                     if log_type == "llm":
-                        scan_logger.llm(message, details)
+                        scan_logger.llm(message, details, agent="AI Validation SubAgent")
                     elif log_type == "tool":
-                        scan_logger.tool(tool or "agent", message, details)
+                        scan_logger.tool(tool or "agent", message, details, agent="AI Validation SubAgent")
                     elif log_type == "output":
-                        scan_logger.output(tool or "agent", message, details)
+                        scan_logger.output(tool or "agent", message, details, agent="AI Validation SubAgent")
                     elif log_type == "error":
-                        scan_logger.error(message, details)
+                        scan_logger.error(message, details, agent="AI Validation SubAgent")
                     elif log_type == "success":
-                        scan_logger.success(message, details)
+                        scan_logger.success(message, details, agent="AI Validation SubAgent")
                     else:
-                        scan_logger.info(message, details)
+                        scan_logger.info(message, details, agent="AI Validation SubAgent")
                 
                 # 预加载 Agent 所需的配置，避免 Agent 内部并发访问数据库
                 llm_config, search_config = loop.run_until_complete(
@@ -1050,7 +1064,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 summary="Reporting SubAgent 正在汇总扫描、验证与漏洞上下文。",
             ))
         if findings or scan_context.get("agent_summary"):
-            scan_logger.llm("🤖 AI 开始生成扫描报告", f"综合 {len(findings)} 个发现和 AI Agent 测试结果")
+            scan_logger.llm("🤖 Reporting SubAgent 开始生成扫描报告", f"综合 {len(findings)} 个发现和 AI Agent 测试结果", agent="Reporting SubAgent")
             
             try:
                 analyzer = get_analyzer()
@@ -1073,7 +1087,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                     scan_info["ai_agent_summary"] = scan_context["agent_summary"]
                     scan_info["ai_agent_tools"] = scan_context.get("agent_tools_used", [])
                 
-                scan_logger.llm("📤 发送数据到 AI 模型", f"分析 {len(vuln_dicts)} 个漏洞发现...")
+                scan_logger.llm("📤 Reporting SubAgent 发送数据到 AI 模型", f"分析 {len(vuln_dicts)} 个漏洞发现...", agent="Reporting SubAgent")
 
                 result = loop.run_until_complete(analyzer.summarize_scan(
                     target=target,
@@ -1085,8 +1099,9 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
                 risk_score = result.risk_score
                 
                 scan_logger.llm(
-                    "📥 AI 分析完成", 
-                    f"风险评分: {risk_score}/100\n\n{llm_summary}"
+                    "📥 Reporting SubAgent 分析完成", 
+                    f"风险评分: {risk_score}/100\n\n{llm_summary}",
+                    agent="Reporting SubAgent"
                 )
                 if config.get("enable_sub_agents", True):
                     loop.run_until_complete(_update_sub_agent(

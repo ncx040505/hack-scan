@@ -65,6 +65,37 @@ class AgentThought(BaseModel):
         extra = "allow"
 
 
+def _stringify_content(content) -> str:
+    """将不同 LLM content 格式统一转换为字符串"""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content") or item.get("message")
+                if text is not None:
+                    parts.append(_stringify_content(text))
+                else:
+                    parts.append(json.dumps(item, ensure_ascii=False))
+            else:
+                parts.append(str(item))
+        return "\n".join(part for part in parts if part)
+    if isinstance(content, dict):
+        text = content.get("text") or content.get("content")
+        if text is not None:
+            return _stringify_content(text)
+        message = content.get("message")
+        if isinstance(message, dict):
+            return _stringify_content(message.get("content"))
+        return json.dumps(content, ensure_ascii=False)
+    return str(content)
+
+
 class SecurityAgent:
     """AI 驱动的安全测试代理"""
     
@@ -437,7 +468,7 @@ class SecurityAgent:
         """获取当前 agent 状态（用于暂停时保存）"""
         return {
             "messages": [
-                {"type": m.__class__.__name__, "content": m.content}
+                {"type": m.__class__.__name__, "content": _stringify_content(m.content)}
                 for m in self.messages
             ],
             "findings": self.findings,
@@ -454,7 +485,7 @@ class SecurityAgent:
         self.messages = []
         for msg in state.get("messages", []):
             msg_type = msg["type"]
-            content = msg["content"]
+            content = _stringify_content(msg["content"])
             if msg_type == "SystemMessage":
                 self.messages.append(SystemMessage(content=content))
             elif msg_type == "HumanMessage":
@@ -528,6 +559,7 @@ class SecurityAgent:
                     content = response
                 elif isinstance(response, dict):
                     content = response.get('content') or response.get('text') or response.get('message', {}).get('content')
+                content = _stringify_content(content)
                 
                 # 记录 AI 原始响应
                 if content:
@@ -710,7 +742,7 @@ class SecurityAgent:
         if not value:
             return None, None
             
-        value = value.strip()
+        value = _stringify_content(value).strip()
         
         # 处理 URL 格式
         url_match = re.match(r'^(https?://)?([^:/\s]+)(?::(\d+))?', value)
@@ -741,7 +773,10 @@ class SecurityAgent:
 
     def _normalize_tool_args(self, tool_name: str, tool_args: dict) -> dict:
         """标准化工具参数，自动修正常见的参数名混淆和格式问题"""
-        args = tool_args.copy()
+        args = {
+            key: _stringify_content(value) if isinstance(value, (list, dict)) else value
+            for key, value in (tool_args or {}).copy().items()
+        }
         
         # 定义每个工具需要的主要参数名
         # 格式: {tool_name: (expected_param, [alternative_names])}
@@ -840,9 +875,11 @@ class SecurityAgent:
         """智能解析 curl 参数"""
         # 确保 URL 有协议前缀
         if args.get("url"):
-            url = args["url"]
+            url = _stringify_content(args["url"]).strip()
             if not url.startswith(('http://', 'https://')):
                 args["url"] = f"http://{url}"
+            else:
+                args["url"] = url
                 logger.debug(f"Auto-added http:// prefix to curl url")
         return args
 
@@ -1006,7 +1043,7 @@ class SecurityAgent:
         if tool_name == "curl":
             # URL 格式问题
             if repaired.get("url"):
-                url = repaired["url"]
+                url = _stringify_content(repaired["url"])
                 # 移除多余的空格
                 url = url.strip()
                 # 确保有协议
