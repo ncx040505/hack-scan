@@ -248,7 +248,7 @@ export default function ScanList() {
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-200">
-                  目标
+                  目标地址
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-200">
                   类型
@@ -349,7 +349,7 @@ export default function ScanList() {
                   <option value={100}>100 条</option>
                 </select>
               </div>
-              
+
               {/* Navigation Buttons */}
               <div className="flex items-center gap-2">
                 <button

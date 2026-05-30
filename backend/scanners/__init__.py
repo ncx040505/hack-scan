@@ -6,7 +6,15 @@ from sqlalchemy import select, cast, String, func
 from app.core.database import AsyncSessionLocal
 from app.models.database import SecurityTool
 from .base import BaseScanner, ScannerType
-from .kali_scanner import KaliNmapScanner, KaliNucleiScanner
+from .kali_scanner import (
+    KaliNmapScanner, 
+    KaliNucleiScanner,
+    KaliNiktoScanner,
+    KaliGobusterScanner,
+    KaliSqlmapScanner,
+    KaliWhatWebScanner,
+    KaliSslscanScanner
+)
 
 
 def get_scanner(scanner_type: ScannerType) -> BaseScanner:
@@ -14,6 +22,11 @@ def get_scanner(scanner_type: ScannerType) -> BaseScanner:
     scanners = {
         ScannerType.NMAP: KaliNmapScanner,
         ScannerType.NUCLEI: KaliNucleiScanner,
+        ScannerType.NIKTO: KaliNiktoScanner,
+        ScannerType.GOBUSTER: KaliGobusterScanner,
+        ScannerType.SQLMAP: KaliSqlmapScanner,
+        ScannerType.WHATWEB: KaliWhatWebScanner,
+        ScannerType.SSLSCAN: KaliSslscanScanner,
     }
     
     if scanner_type not in scanners:

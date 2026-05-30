@@ -71,6 +71,11 @@ export interface ScanConfig {
   enable_port_scan: boolean
   enable_web_scan: boolean
   enable_nuclei: boolean
+  enable_nikto: boolean
+  enable_gobuster: boolean
+  enable_sqlmap: boolean
+  enable_whatweb: boolean
+  enable_sslscan: boolean
   custom_ports: number[]
   scan_depth: number
   rate_limit: number

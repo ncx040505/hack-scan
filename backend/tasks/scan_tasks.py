@@ -214,29 +214,66 @@ def _sub_agent_task(
 
 
 def _scanner_sub_agent_id(scanner_type: ScannerType) -> str:
-    if scanner_type == ScannerType.NMAP:
+    """根据扫描器类型返回对应的 SubAgent ID"""
+    # 侦察类扫描器
+    if scanner_type in {ScannerType.NMAP, ScannerType.WHATWEB}:
         return "recon-subagent"
-    if scanner_type == ScannerType.NUCLEI:
+    # 漏洞扫描类
+    if scanner_type in {ScannerType.NUCLEI, ScannerType.NIKTO, ScannerType.SQLMAP}:
         return "vulnerability-subagent"
+    # 目录枚举类
+    if scanner_type == ScannerType.GOBUSTER:
+        return "directory-subagent"
+    # SSL/TLS 分析类
+    if scanner_type == ScannerType.SSLSCAN:
+        return "ssl-subagent"
     return f"{scanner_type.value}-subagent"
 
 
 def _build_sub_agent_plan(config: dict, scanners_to_run: list[ScannerType]) -> list[dict]:
     plan = []
-    if ScannerType.NMAP in scanners_to_run:
+    
+    # 侦察 SubAgent（NMAP、WhatWeb）
+    recon_scanners = [s for s in scanners_to_run if s in {ScannerType.NMAP, ScannerType.WHATWEB}]
+    if recon_scanners:
+        tools = "、".join(s.value.upper() for s in recon_scanners)
         plan.append(_sub_agent_task(
             "recon-subagent",
             "Recon SubAgent",
-            "资产探测与端口识别",
-            "识别目标暴露面、开放端口与基础服务指纹。",
+            "资产探测与指纹识别",
+            f"识别目标暴露面、开放端口、服务版本与 Web 技术栈（使用 {tools}）。",
         ))
-    if ScannerType.NUCLEI in scanners_to_run:
+    
+    # 漏洞扫描 SubAgent（Nuclei、Nikto、SQLMap）
+    vuln_scanners = [s for s in scanners_to_run if s in {ScannerType.NUCLEI, ScannerType.NIKTO, ScannerType.SQLMAP}]
+    if vuln_scanners:
+        tools = "、".join(s.value.upper() for s in vuln_scanners)
         plan.append(_sub_agent_task(
             "vulnerability-subagent",
             "Vulnerability SubAgent",
-            "模板化漏洞验证",
-            "调用漏洞扫描器验证常见 Web 与服务漏洞。",
+            "漏洞检测与验证",
+            f"使用多种工具验证常见漏洞（{tools}）。",
         ))
+    
+    # 目录枚举 SubAgent（Gobuster）
+    if ScannerType.GOBUSTER in scanners_to_run:
+        plan.append(_sub_agent_task(
+            "directory-subagent",
+            "Directory SubAgent",
+            "目录与文件枚举",
+            "枚举 Web 服务器上的隐藏目录、文件和敏感路径。",
+        ))
+    
+    # SSL/TLS 分析 SubAgent（SSLScan）
+    if ScannerType.SSLSCAN in scanners_to_run:
+        plan.append(_sub_agent_task(
+            "ssl-subagent",
+            "SSL SubAgent",
+            "SSL/TLS 配置分析",
+            "分析 SSL/TLS 配置，检测弱加密、过期证书和协议漏洞。",
+        ))
+    
+    # AI 验证 SubAgent
     if config.get("enable_ai_agent", True):
         plan.append(_sub_agent_task(
             "ai-validation-subagent",
@@ -244,6 +281,8 @@ def _build_sub_agent_plan(config: dict, scanners_to_run: list[ScannerType]) -> l
             "自主安全测试与发现验证",
             "基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。",
         ))
+    
+    # 报告生成 SubAgent
     plan.append(_sub_agent_task(
         "reporting-subagent",
         "Reporting SubAgent",
@@ -615,6 +654,16 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
             scanners_to_run.append(ScannerType.NMAP)
         if config.get("enable_nuclei", True) and ScannerType.NUCLEI in available:
             scanners_to_run.append(ScannerType.NUCLEI)
+        if config.get("enable_nikto", True) and ScannerType.NIKTO in available:
+            scanners_to_run.append(ScannerType.NIKTO)
+        if config.get("enable_gobuster", True) and ScannerType.GOBUSTER in available:
+            scanners_to_run.append(ScannerType.GOBUSTER)
+        if config.get("enable_sqlmap", True) and ScannerType.SQLMAP in available:
+            scanners_to_run.append(ScannerType.SQLMAP)
+        if config.get("enable_whatweb", True) and ScannerType.WHATWEB in available:
+            scanners_to_run.append(ScannerType.WHATWEB)
+        if config.get("enable_sslscan", True) and ScannerType.SSLSCAN in available:
+            scanners_to_run.append(ScannerType.SSLSCAN)
         
         if not scanners_to_run:
             scan_logger.error("❌ 主 Agent 未找到可用扫描器", agent="主 Agent")

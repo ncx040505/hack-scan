@@ -11,6 +11,11 @@ from pathlib import Path
 class ScannerType(str, Enum):
     NMAP = "nmap"
     NUCLEI = "nuclei"
+    NIKTO = "nikto"
+    GOBUSTER = "gobuster"
+    SQLMAP = "sqlmap"
+    WHATWEB = "whatweb"
+    SSLSCAN = "sslscan"
     WEB = "web"
     CUSTOM = "custom"
 

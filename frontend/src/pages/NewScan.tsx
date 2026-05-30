@@ -40,6 +40,11 @@ export default function NewScan() {
   const [config, setConfig] = useState<Partial<ScanConfig>>({
     enable_port_scan: true,
     enable_nuclei: true,
+    enable_nikto: true,
+    enable_gobuster: true,
+    enable_sqlmap: true,
+    enable_whatweb: true,
+    enable_sslscan: true,
     enable_sub_agents: true,
     scan_depth: 3,
     rate_limit: 10,
@@ -276,7 +281,75 @@ export default function NewScan() {
                 onChange={e => setConfig({ ...config, enable_nuclei: e.target.checked })}
                 className="w-4 h-4"
               />
-              启用漏洞扫描 (Nuclei)
+              <span>
+                启用漏洞扫描 (Nuclei)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">模板化漏洞检测，覆盖 CVE、 RCE 等</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={config.enable_nikto}
+                onChange={e => setConfig({ ...config, enable_nikto: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>
+                启用 Web 漏洞扫描 (Nikto)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">Web 服务器漏洞、配置错误检测</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={config.enable_gobuster}
+                onChange={e => setConfig({ ...config, enable_gobuster: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>
+                启用目录枚举 (Gobuster)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">发现隐藏目录、文件和敏感路径</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={config.enable_sqlmap}
+                onChange={e => setConfig({ ...config, enable_sqlmap: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>
+                启用 SQL 注入检测 (SQLMap)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">自动化 SQL 注入漏洞检测</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={config.enable_whatweb}
+                onChange={e => setConfig({ ...config, enable_whatweb: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>
+                启用 Web 指纹识别 (WhatWeb)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">识别 CMS、框架、技术栈</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={config.enable_sslscan}
+                onChange={e => setConfig({ ...config, enable_sslscan: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>
+                启用 SSL/TLS 分析 (SSLScan)
+                <span className="block text-xs text-gray-500 dark:text-gray-400">检测弱加密、过期证书、协议漏洞</span>
+              </span>
             </label>
 
             <div>
@@ -365,9 +438,9 @@ export default function NewScan() {
                   className="w-4 h-4 mt-1"
                 />
                 <span>
-                  <span className="block text-sm font-medium">启用 SubAgent 任务编排</span>
+                  <span className="block text-sm font-medium">启用子智能体任务编排</span>
                   <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    主 Agent 会把侦察、漏洞验证、AI 验证、报告生成拆分给多个 SubAgent，并在扫描详情中展示进度。
+                    主 Agent 会把侦察、漏洞验证、AI 验证、报告生成拆分给多个子智能体，并在扫描详情中展示进度。
                   </span>
                 </span>
               </label>

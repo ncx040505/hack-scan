@@ -19,6 +19,11 @@ class ScanConfig(BaseModel):
     enable_port_scan: bool = True
     enable_web_scan: bool = True
     enable_nuclei: bool = True
+    enable_nikto: bool = True
+    enable_gobuster: bool = True
+    enable_sqlmap: bool = True
+    enable_whatweb: bool = True
+    enable_sslscan: bool = True
     
     # AI Agent 配置
     enable_ai_agent: bool = True
