@@ -440,6 +440,80 @@ export async function getToolCategories() {
   return data
 }
 
+// ============ Kali Pre-installed Scanners ============
+
+export interface KaliScannerInfo {
+  type: string
+  name: string
+  registered: boolean
+}
+
+export interface KaliScannerCategory {
+  key: string
+  name: string
+  description: string
+  tools: KaliScannerInfo[]
+}
+
+export interface KaliScannerResponse {
+  total: number
+  categories: KaliScannerCategory[]
+}
+
+export async function getKaliScanners() {
+  const { data } = await api.get<KaliScannerResponse>('/tools/kali-scanners')
+  return data
+}
+
+// ============ Nuclei Templates (from Kali container) ============
+
+export interface NucleiTemplate {
+  id: string
+  name: string
+  path: string
+  category: string
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  file_size: number
+  tags: string[]
+}
+
+export interface NucleiTemplateListResponse {
+  total: number
+  items: NucleiTemplate[]
+  templates_dir: string
+}
+
+export interface NucleiTemplateStats {
+  total: number
+  categories: Record<string, number>
+  severities: Record<string, number>
+  templates_dir: string
+}
+
+export async function getNucleiTemplates(params?: {
+  category?: string
+  severity?: string
+  search?: string
+  skip?: number
+  limit?: number
+}) {
+  const { data } = await api.get<NucleiTemplateListResponse>('/tools/nuclei-templates', { params })
+  return data
+}
+
+export async function getNucleiTemplateStats() {
+  const { data } = await api.get<NucleiTemplateStats>('/tools/nuclei-templates/stats')
+  return data
+}
+
+export async function getNucleiTemplateContent(path: string) {
+  const { data } = await api.get<{ content: string; path: string; size: number }>(
+    '/tools/nuclei-templates/content',
+    { params: { path } }
+  )
+  return data
+}
+
 // ============ LLM Settings ============
 
 export interface LLMConfig {

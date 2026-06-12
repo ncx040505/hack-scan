@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, String, text
 from loguru import logger
+import httpx
 
 from app.core.database import get_db
 from app.core.config import get_settings
@@ -328,6 +329,34 @@ async def list_categories(
     }
 
 
+@router.get("/kali-scanners")
+async def list_kali_scanners():
+    """获取 Kali 容器中预置的扫描器列表，按类别分组"""
+    from scanners import SCANNER_CATEGORIES, SCANNER_REGISTRY
+
+    categories = []
+    for cat_key, cat_config in SCANNER_CATEGORIES.items():
+        tools = []
+        for scanner_type in cat_config["tools"]:
+            scanner_class = SCANNER_REGISTRY.get(scanner_type)
+            tools.append({
+                "type": scanner_type.value,
+                "name": scanner_type.value.upper(),
+                "registered": scanner_class is not None,
+            })
+        categories.append({
+            "key": cat_key,
+            "name": cat_config["name"],
+            "description": cat_config["description"],
+            "tools": tools,
+        })
+
+    return {
+        "total": sum(len(c["tools"]) for c in categories),
+        "categories": categories,
+    }
+
+
 @router.get("/skill-template")
 async def get_skill_template():
     """获取 Skill 模板示例"""
@@ -513,3 +542,74 @@ async def delete_tool(
     logger.info(f"Tool deleted: {tool.name}")
     
     return {"message": "工具已删除", "id": tool_id}
+
+
+# ============= Nuclei 模板代理 =============
+
+@router.get("/nuclei-templates")
+async def get_nuclei_templates(
+    category: str | None = None,
+    severity: str | None = None,
+    search: str | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """从 Kali 容器获取 Nuclei 模板列表"""
+    kali_url = settings.kali_scanner_url
+    params = {"skip": skip, "limit": limit}
+    if category:
+        params["category"] = category
+    if severity:
+        params["severity"] = severity
+    if search:
+        params["search"] = search
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{kali_url}/nuclei-templates", params=params)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException:
+        logger.error("Kali nuclei-templates request timeout")
+        raise HTTPException(status_code=504, detail="Kali 扫描器响应超时")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Kali nuclei-templates HTTP error: {e.response.status_code}")
+        raise HTTPException(status_code=502, detail="Kali 扫描器返回错误")
+    except Exception as e:
+        logger.error(f"Kali nuclei-templates connection error: {e}")
+        raise HTTPException(status_code=502, detail=f"无法连接 Kali 扫描器: {str(e)}")
+
+
+@router.get("/nuclei-templates/stats")
+async def get_nuclei_templates_stats():
+    """从 Kali 容器获取 Nuclei 模板统计"""
+    kali_url = settings.kali_scanner_url
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{kali_url}/nuclei-templates/stats")
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        logger.error(f"Kali nuclei-templates/stats error: {e}")
+        return {"total": 0, "categories": {}, "severities": {}, "templates_dir": ""}
+
+
+@router.get("/nuclei-templates/content")
+async def get_nuclei_template_content(path: str = Query(..., description="模板相对路径")):
+    """从 Kali 容器读取 Nuclei 模板内容"""
+    kali_url = settings.kali_scanner_url
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{kali_url}/nuclei-templates/content",
+                params={"path": path}
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="模板不存在")
+        raise HTTPException(status_code=502, detail="Kali 扫描器返回错误")
+    except Exception as e:
+        logger.error(f"Kali nuclei-templates/content error: {e}")
+        raise HTTPException(status_code=502, detail=f"无法连接 Kali 扫描器: {str(e)}")

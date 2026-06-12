@@ -17,6 +17,13 @@ class ScannerType(str, Enum):
     HTTPX = "httpx"
     WHATWEB = "whatweb"
     KATANA = "katana"
+    SUBFINDER = "subfinder"
+    AMASS = "amass"
+    DIRB = "dirb"
+    DIG = "dig"
+    WHOIS = "whois"
+    ARPING = "arping"
+    DNS = "dns"
     
     # 漏洞扫描与组件分析
     NUCLEI = "nuclei"
@@ -29,6 +36,13 @@ class ScannerType(str, Enum):
     OSV_SCANNER = "osv-scanner"
     SEARCHSPLOIT = "searchsploit"
     YARA = "yara"
+    ZAP = "zap"
+    WAFW00F = "wafw00f"
+    MSFCONSOLE = "msfconsole"
+    DAVTEST = "davtest"
+    SUBJACK = "subjack"
+    NMAP_VULN = "nmap-vuln"
+    WPSCAN = "wpscan"
     
     # Web/API 测试
     OWASP_ZAP = "owasp-zap"
@@ -43,6 +57,9 @@ class ScannerType(str, Enum):
     COMMIX = "commix"
     JWT_TOOL = "jwt_tool"
     NEWMAN = "newman"
+    SMBMAP = "smbmap"
+    NBTSCAN = "nbtscan"
+    CURL_PROBE = "curl-probe"
     
     # 凭证与身份验证
     HYDRA = "hydra"
@@ -67,6 +84,7 @@ class ScannerType(str, Enum):
     VOLATILITY = "volatility"
     GITLEAKS = "gitleaks"
     TRUFFLEHOG = "trufflehog"
+    RESPONDER = "responder"
     
     # 通用
     SSLSCAN = "sslscan"

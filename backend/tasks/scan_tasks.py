@@ -214,162 +214,41 @@ def _sub_agent_task(
 
 
 def _scanner_sub_agent_id(scanner_type: ScannerType) -> str:
-    """根据扫描器类型返回对应的 SubAgent ID"""
-    # 侦察类扫描器（网络扫描与资产识别）
-    if scanner_type in {
-        ScannerType.NMAP, ScannerType.MASSCAN, ScannerType.NAABU,
-        ScannerType.RUSTSCAN, ScannerType.HTTPX, ScannerType.WHATWEB,
-        ScannerType.KATANA
-    }:
+    if scanner_type == ScannerType.NMAP:
         return "recon-subagent"
-    
-    # 漏洞扫描类
-    if scanner_type in {
-        ScannerType.NUCLEI, ScannerType.NIKTO, ScannerType.WAPITI,
-        ScannerType.TRIVY, ScannerType.GRYPE, ScannerType.LYNIS,
-        ScannerType.SEARCHSPLOIT, ScannerType.YARA
-    }:
+    if scanner_type == ScannerType.NUCLEI:
         return "vulnerability-subagent"
-    
-    # Web 测试类
-    if scanner_type in {
-        ScannerType.SQLMAP, ScannerType.FFUF, ScannerType.DIRSEARCH,
-        ScannerType.GOBUSTER, ScannerType.FEROXBUSTER, ScannerType.WFUZZ,
-        ScannerType.DALFOX, ScannerType.XSSTRIKE, ScannerType.COMMIX,
-        ScannerType.JWT_TOOL, ScannerType.NEWMAN, ScannerType.SSLSCAN
-    }:
-        return "web-testing-subagent"
-    
-    # 凭证测试类
-    if scanner_type in {
-        ScannerType.HYDRA, ScannerType.MEDUSA, ScannerType.PATATOR,
-        ScannerType.CROWBAR, ScannerType.NETEXEC, ScannerType.CEWL,
-        ScannerType.JOHN, ScannerType.HASHCAT, ScannerType.KERBRUTE,
-        ScannerType.ENUM4LINUX
-    }:
-        return "credential-subagent"
-    
-    # 后渗透与取证类
-    if scanner_type in {
-        ScannerType.LINPEAS, ScannerType.WINPEAS, ScannerType.LINENUM,
-        ScannerType.LINUX_EXPLOIT_SUGGESTER, ScannerType.WINDOWS_EXPLOIT_SUGGESTER,
-        ScannerType.SEATBELT, ScannerType.PSY, ScannerType.VOLATILITY,
-        ScannerType.GITLEAKS, ScannerType.TRUFFLEHOG
-    }:
-        return "post-exploit-subagent"
-    
     return f"{scanner_type.value}-subagent"
 
 
 def _build_sub_agent_plan(config: dict, scanners_to_run: list[ScannerType]) -> list[dict]:
     plan = []
-    
-    # 侦察子智能体（网络扫描与资产识别）
-    recon_types = {
-        ScannerType.NMAP, ScannerType.MASSCAN, ScannerType.NAABU,
-        ScannerType.RUSTSCAN, ScannerType.HTTPX, ScannerType.WHATWEB,
-        ScannerType.KATANA
-    }
-    recon_scanners = [s for s in scanners_to_run if s in recon_types]
-    if recon_scanners:
-        tools = "、".join(s.value.upper() for s in recon_scanners[:5])
-        if len(recon_scanners) > 5:
-            tools += f" 等 {len(recon_scanners)} 个工具"
+    if ScannerType.NMAP in scanners_to_run:
         plan.append(_sub_agent_task(
             "recon-subagent",
-            "侦察子智能体",
-            "资产探测与指纹识别",
-            f"识别目标暴露面、开放端口、服务版本与 Web 技术栈（使用 {tools}）。",
+            "Recon SubAgent",
+            "资产探测与端口识别",
+            "识别目标暴露面、开放端口与基础服务指纹。",
         ))
-    
-    # 漏洞扫描子智能体
-    vuln_types = {
-        ScannerType.NUCLEI, ScannerType.NIKTO, ScannerType.WAPITI,
-        ScannerType.TRIVY, ScannerType.GRYPE, ScannerType.LYNIS,
-        ScannerType.SEARCHSPLOIT, ScannerType.YARA
-    }
-    vuln_scanners = [s for s in scanners_to_run if s in vuln_types]
-    if vuln_scanners:
-        tools = "、".join(s.value.upper() for s in vuln_scanners[:5])
-        if len(vuln_scanners) > 5:
-            tools += f" 等 {len(vuln_scanners)} 个工具"
+    if ScannerType.NUCLEI in scanners_to_run:
         plan.append(_sub_agent_task(
             "vulnerability-subagent",
-            "漏洞扫描子智能体",
-            "漏洞检测与验证",
-            f"使用多种工具验证常见漏洞（{tools}）。",
+            "Vulnerability SubAgent",
+            "模板化漏洞验证",
+            "调用漏洞扫描器验证常见 Web 与服务漏洞。",
         ))
-    
-    # Web 测试子智能体
-    web_types = {
-        ScannerType.SQLMAP, ScannerType.FFUF, ScannerType.DIRSEARCH,
-        ScannerType.GOBUSTER, ScannerType.FEROXBUSTER, ScannerType.WFUZZ,
-        ScannerType.DALFOX, ScannerType.XSSTRIKE, ScannerType.COMMIX,
-        ScannerType.JWT_TOOL, ScannerType.NEWMAN, ScannerType.SSLSCAN
-    }
-    web_scanners = [s for s in scanners_to_run if s in web_types]
-    if web_scanners:
-        tools = "、".join(s.value.upper() for s in web_scanners[:5])
-        if len(web_scanners) > 5:
-            tools += f" 等 {len(web_scanners)} 个工具"
-        plan.append(_sub_agent_task(
-            "web-testing-subagent",
-            "Web 测试子智能体",
-            "Web/API 安全测试",
-            f"进行 Web 枚举、参数变异、注入检测等测试（{tools}）。",
-        ))
-    
-    # 凭证测试子智能体（默认禁用）
-    if config.get("enable_category_cred", False):
-        cred_types = {
-            ScannerType.HYDRA, ScannerType.MEDUSA, ScannerType.PATATOR,
-            ScannerType.CROWBAR, ScannerType.NETEXEC, ScannerType.CEWL,
-            ScannerType.JOHN, ScannerType.HASHCAT, ScannerType.KERBRUTE,
-            ScannerType.ENUM4LINUX
-        }
-        cred_scanners = [s for s in scanners_to_run if s in cred_types]
-        if cred_scanners:
-            tools = "、".join(s.value.upper() for s in cred_scanners[:5])
-            plan.append(_sub_agent_task(
-                "credential-subagent",
-                "凭证测试子智能体",
-                "凭证与身份验证测试",
-                f"在授权环境下进行凭证测试（{tools}）。",
-            ))
-    
-    # 后渗透与取证子智能体（默认禁用）
-    if config.get("enable_category_post_exploit", False):
-        post_types = {
-            ScannerType.LINPEAS, ScannerType.WINPEAS, ScannerType.LINENUM,
-            ScannerType.LINUX_EXPLOIT_SUGGESTER, ScannerType.WINDOWS_EXPLOIT_SUGGESTER,
-            ScannerType.SEATBELT, ScannerType.PSY, ScannerType.VOLATILITY,
-            ScannerType.GITLEAKS, ScannerType.TRUFFLEHOG
-        }
-        post_scanners = [s for s in scanners_to_run if s in post_types]
-        if post_scanners:
-            tools = "、".join(s.value.upper() for s in post_scanners[:5])
-            plan.append(_sub_agent_task(
-                "post-exploit-subagent",
-                "后渗透子智能体",
-                "后渗透与取证辅助",
-                f"进行权限提升检查、敏感信息发现等（{tools}）。",
-            ))
-    
-    # AI 验证子智能体
     if config.get("enable_ai_agent", True):
         plan.append(_sub_agent_task(
             "ai-validation-subagent",
-            "AI 验证子智能体",
+            "AI Validation SubAgent",
             "自主安全测试与发现验证",
             "基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。",
         ))
-    
-    # 报告生成子智能体
     plan.append(_sub_agent_task(
         "reporting-subagent",
-        "报告生成子智能体",
+        "Reporting SubAgent",
         "风险归纳与报告生成",
-        "汇总各子智能体输出，生成风险评分、修复建议与攻击路径。",
+        "汇总各 SubAgent 输出，生成风险评分、修复建议与攻击路径。",
     ))
     return plan
 
@@ -732,85 +611,10 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
         )
         
         scanners_to_run = []
-        
-        # 网络扫描与资产识别
-        if config.get("enable_category_network", True):
-            network_tools = [
-                ("enable_nmap", ScannerType.NMAP),
-                ("enable_masscan", ScannerType.MASSCAN),
-                ("enable_naabu", ScannerType.NAABU),
-                ("enable_rustscan", ScannerType.RUSTSCAN),
-                ("enable_httpx", ScannerType.HTTPX),
-                ("enable_whatweb", ScannerType.WHATWEB),
-                ("enable_katana", ScannerType.KATANA),
-            ]
-            for config_key, scanner_type in network_tools:
-                if config.get(config_key, True) and scanner_type in available:
-                    scanners_to_run.append(scanner_type)
-        
-        # 漏洞扫描与组件分析
-        if config.get("enable_category_vuln", True):
-            vuln_tools = [
-                ("enable_nuclei", ScannerType.NUCLEI),
-                ("enable_nikto", ScannerType.NIKTO),
-                ("enable_wapiti", ScannerType.WAPITI),
-                ("enable_trivy", ScannerType.TRIVY),
-                ("enable_grype", ScannerType.GRYPE),
-                ("enable_lynis", ScannerType.LYNIS),
-                ("enable_searchsploit", ScannerType.SEARCHSPLOIT),
-                ("enable_yara", ScannerType.YARA),
-            ]
-            for config_key, scanner_type in vuln_tools:
-                if config.get(config_key, True) and scanner_type in available:
-                    scanners_to_run.append(scanner_type)
-        
-        # Web/API 测试
-        if config.get("enable_category_web", True):
-            web_tools = [
-                ("enable_sqlmap", ScannerType.SQLMAP),
-                ("enable_ffuf", ScannerType.FFUF),
-                ("enable_dirsearch", ScannerType.DIRSEARCH),
-                ("enable_gobuster", ScannerType.GOBUSTER),
-                ("enable_feroxbuster", ScannerType.FEROXBUSTER),
-                ("enable_wfuzz", ScannerType.WFUZZ),
-                ("enable_dalfox", ScannerType.DALFOX),
-                ("enable_xsstrike", ScannerType.XSSTRIKE),
-                ("enable_commix", ScannerType.COMMIX),
-                ("enable_jwt_tool", ScannerType.JWT_TOOL),
-                ("enable_newman", ScannerType.NEWMAN),
-                ("enable_sslscan", ScannerType.SSLSCAN),
-            ]
-            for config_key, scanner_type in web_tools:
-                if config.get(config_key, True) and scanner_type in available:
-                    scanners_to_run.append(scanner_type)
-        
-        # 凭证与身份验证（默认禁用，需要显式启用）
-        if config.get("enable_category_cred", False):
-            cred_tools = [
-                ("enable_hydra", ScannerType.HYDRA),
-                ("enable_medusa", ScannerType.MEDUSA),
-                ("enable_netexec", ScannerType.NETEXEC),
-                ("enable_cewl", ScannerType.CEWL),
-                ("enable_kerbrute", ScannerType.KERBRUTE),
-                ("enable_enum4linux", ScannerType.ENUM4LINUX),
-            ]
-            for config_key, scanner_type in cred_tools:
-                if config.get(config_key, False) and scanner_type in available:
-                    scanners_to_run.append(scanner_type)
-        
-        # 后渗透与取证辅助（默认禁用，需要显式启用）
-        if config.get("enable_category_post_exploit", False):
-            post_tools = [
-                ("enable_gitleaks", ScannerType.GITLEAKS),
-                ("enable_trufflehog", ScannerType.TRUFFLEHOG),
-                ("enable_pspy", ScannerType.PSY),
-                ("enable_linpeas", ScannerType.LINPEAS),
-                ("enable_linenum", ScannerType.LINENUM),
-                ("enable_linux_exploit_suggester", ScannerType.LINUX_EXPLOIT_SUGGESTER),
-            ]
-            for config_key, scanner_type in post_tools:
-                if config.get(config_key, False) and scanner_type in available:
-                    scanners_to_run.append(scanner_type)
+        if config.get("enable_port_scan", True) and ScannerType.NMAP in available:
+            scanners_to_run.append(ScannerType.NMAP)
+        if config.get("enable_nuclei", True) and ScannerType.NUCLEI in available:
+            scanners_to_run.append(ScannerType.NUCLEI)
         
         if not scanners_to_run:
             scan_logger.error("❌ 主 Agent 未找到可用扫描器", agent="主 Agent")
@@ -821,7 +625,7 @@ def execute_scan(self, scan_task_id: str, target: str, scan_type: str, config: d
             sub_agent_plan = _build_sub_agent_plan(config, scanners_to_run)
             await _set_sub_agents(session_factory, scan_task_id, sub_agent_plan)
             scan_logger.info(
-                "🧠 主 Agent 已编排子智能体任务",
+                "🧠 主 Agent 已编排 SubAgent 任务",
                 "\n".join(f"• {agent['name']}: {agent['objective']}" for agent in sub_agent_plan)
                 , agent="主 Agent"
             )

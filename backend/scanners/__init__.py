@@ -20,7 +20,14 @@ from .network_scanners import (
     KaliNaabuScanner,
     KaliRustscanScanner,
     KaliHttpxScanner,
-    KaliKatanaScanner
+    KaliKatanaScanner,
+    KaliSubfinderScanner,
+    KaliAmassScanner,
+    KaliDirbScanner,
+    KaliDigScanner,
+    KaliWhoisScanner,
+    KaliArpingScanner,
+    KaliFierceScanner,
 )
 from .vuln_scanners import (
     KaliWapitiScanner,
@@ -28,7 +35,13 @@ from .vuln_scanners import (
     KaliGrypeScanner,
     KaliLynisScanner,
     KaliSearchsploitScanner,
-    KaliYaraScanner
+    KaliYaraScanner,
+    KaliZapScanner,
+    KaliWafw00fScanner,
+    KaliMsfconsoleScanner,
+    KaliDavtestScanner,
+    KaliSubjackScanner,
+    KaliNmapVulnScanner,
 )
 from .web_scanners import (
     KaliFuffScanner,
@@ -39,7 +52,11 @@ from .web_scanners import (
     KaliXsstrikeScanner,
     KaliCommixScanner,
     KaliJwtToolScanner,
-    KaliNewmanScanner
+    KaliNewmanScanner,
+    KaliSmbmapScanner,
+    KaliNbtscanScanner,
+    KaliCurlScanner,
+    KaliWpscanScanner,
 )
 from .cred_scanners import (
     KaliHydraScanner,
@@ -47,7 +64,10 @@ from .cred_scanners import (
     KaliNetExecScanner,
     KaliCeWLScanner,
     KaliKerbruteScanner,
-    KaliEnum4linuxScanner
+    KaliEnum4linuxScanner,
+    KaliJohnScanner,
+    KaliPatatorScanner,
+    KaliCrowbarScanner,
 )
 from .post_exploit_scanners import (
     KaliGitleaksScanner,
@@ -55,7 +75,8 @@ from .post_exploit_scanners import (
     KaliPspyScanner,
     KaliLinpeasScanner,
     KaliLinEnumScanner,
-    KaliLinuxExploitSuggester
+    KaliLinuxExploitSuggester,
+    KaliResponderScanner,
 )
 
 
@@ -69,6 +90,13 @@ SCANNER_REGISTRY = {
     ScannerType.HTTPX: KaliHttpxScanner,
     ScannerType.WHATWEB: KaliWhatWebScanner,
     ScannerType.KATANA: KaliKatanaScanner,
+    ScannerType.SUBFINDER: KaliSubfinderScanner,
+    ScannerType.AMASS: KaliAmassScanner,
+    ScannerType.DIRB: KaliDirbScanner,
+    ScannerType.DIG: KaliDigScanner,
+    ScannerType.WHOIS: KaliWhoisScanner,
+    ScannerType.ARPING: KaliArpingScanner,
+    ScannerType.DNS: KaliFierceScanner,
     
     # 漏洞扫描与组件分析
     ScannerType.NUCLEI: KaliNucleiScanner,
@@ -79,6 +107,12 @@ SCANNER_REGISTRY = {
     ScannerType.LYNIS: KaliLynisScanner,
     ScannerType.SEARCHSPLOIT: KaliSearchsploitScanner,
     ScannerType.YARA: KaliYaraScanner,
+    ScannerType.ZAP: KaliZapScanner,
+    ScannerType.WAFW00F: KaliWafw00fScanner,
+    ScannerType.MSFCONSOLE: KaliMsfconsoleScanner,
+    ScannerType.DAVTEST: KaliDavtestScanner,
+    ScannerType.SUBJACK: KaliSubjackScanner,
+    ScannerType.NMAP_VULN: KaliNmapVulnScanner,
     
     # Web/API 测试
     ScannerType.SQLMAP: KaliSqlmapScanner,
@@ -92,6 +126,10 @@ SCANNER_REGISTRY = {
     ScannerType.COMMIX: KaliCommixScanner,
     ScannerType.JWT_TOOL: KaliJwtToolScanner,
     ScannerType.NEWMAN: KaliNewmanScanner,
+    ScannerType.SMBMAP: KaliSmbmapScanner,
+    ScannerType.NBTSCAN: KaliNbtscanScanner,
+    ScannerType.CURL_PROBE: KaliCurlScanner,
+    ScannerType.WPSCAN: KaliWpscanScanner,
     
     # 凭证与身份验证
     ScannerType.HYDRA: KaliHydraScanner,
@@ -100,6 +138,9 @@ SCANNER_REGISTRY = {
     ScannerType.CEWL: KaliCeWLScanner,
     ScannerType.KERBRUTE: KaliKerbruteScanner,
     ScannerType.ENUM4LINUX: KaliEnum4linuxScanner,
+    ScannerType.JOHN: KaliJohnScanner,
+    ScannerType.PATATOR: KaliPatatorScanner,
+    ScannerType.CROWBAR: KaliCrowbarScanner,
     
     # 后渗透与取证
     ScannerType.GITLEAKS: KaliGitleaksScanner,
@@ -108,6 +149,7 @@ SCANNER_REGISTRY = {
     ScannerType.LINPEAS: KaliLinpeasScanner,
     ScannerType.LINENUM: KaliLinEnumScanner,
     ScannerType.LINUX_EXPLOIT_SUGGESTER: KaliLinuxExploitSuggester,
+    ScannerType.RESPONDER: KaliResponderScanner,
     
     # 通用
     ScannerType.SSLSCAN: KaliSslscanScanner,
@@ -118,29 +160,36 @@ SCANNER_REGISTRY = {
 SCANNER_CATEGORIES = {
     "network": {
         "name": "网络扫描与资产识别",
-        "description": "目标发现、端口识别、服务指纹、页面遍历",
+        "description": "目标发现、端口识别、服务指纹、子域名枚举、DNS 查询",
         "tools": [
             ScannerType.NMAP, ScannerType.MASSCAN, ScannerType.NAABU,
-            ScannerType.RUSTSCAN, ScannerType.HTTPX, ScannerType.WHATWEB, ScannerType.KATANA
+            ScannerType.RUSTSCAN, ScannerType.HTTPX, ScannerType.WHATWEB, ScannerType.KATANA,
+            ScannerType.SUBFINDER, ScannerType.AMASS, ScannerType.DIRB,
+            ScannerType.DIG, ScannerType.WHOIS, ScannerType.ARPING,
+            ScannerType.DNS,
         ]
     },
     "vuln": {
         "name": "漏洞扫描与组件分析",
-        "description": "规则扫描、漏洞匹配、组件与配置检查",
+        "description": "规则扫描、漏洞匹配、组件与配置检查、Web 应用安全扫描",
         "tools": [
             ScannerType.NUCLEI, ScannerType.NIKTO, ScannerType.WAPITI,
             ScannerType.TRIVY, ScannerType.GRYPE, ScannerType.LYNIS,
-            ScannerType.SEARCHSPLOIT, ScannerType.YARA
+            ScannerType.SEARCHSPLOIT, ScannerType.YARA, ScannerType.ZAP,
+            ScannerType.WAFW00F, ScannerType.MSFCONSOLE, ScannerType.DAVTEST,
+            ScannerType.SUBJACK, ScannerType.NMAP_VULN,
         ]
     },
     "web": {
         "name": "Web/API 测试",
-        "description": "Web 枚举、参数变异、API 回归与报告",
+        "description": "Web 枚举、参数变异、API 回归、SMB/NetBIOS 探测",
         "tools": [
             ScannerType.SQLMAP, ScannerType.FFUF, ScannerType.DIRSEARCH,
             ScannerType.GOBUSTER, ScannerType.FEROXBUSTER, ScannerType.WFUZZ,
             ScannerType.DALFOX, ScannerType.XSSTRIKE, ScannerType.COMMIX,
-            ScannerType.JWT_TOOL, ScannerType.NEWMAN, ScannerType.SSLSCAN
+            ScannerType.JWT_TOOL, ScannerType.NEWMAN, ScannerType.SSLSCAN,
+            ScannerType.SMBMAP, ScannerType.NBTSCAN, ScannerType.CURL_PROBE,
+            ScannerType.WPSCAN,
         ]
     },
     "cred": {
@@ -148,15 +197,17 @@ SCANNER_CATEGORIES = {
         "description": "仅在授权靶场或教学环境下按策略启用",
         "tools": [
             ScannerType.HYDRA, ScannerType.MEDUSA, ScannerType.NETEXEC,
-            ScannerType.CEWL, ScannerType.KERBRUTE, ScannerType.ENUM4LINUX
+            ScannerType.CEWL, ScannerType.KERBRUTE, ScannerType.ENUM4LINUX,
+            ScannerType.JOHN, ScannerType.PATATOR, ScannerType.CROWBAR,
         ]
     },
     "post_exploit": {
         "name": "后渗透与取证辅助",
-        "description": "枚举、取证、配置分析、凭证暴露检查",
+        "description": "枚举、取证、配置分析、凭证暴露检查、LLMNR/NBT-NS 检测",
         "tools": [
             ScannerType.GITLEAKS, ScannerType.TRUFFLEHOG, ScannerType.PSY,
-            ScannerType.LINPEAS, ScannerType.LINENUM, ScannerType.LINUX_EXPLOIT_SUGGESTER
+            ScannerType.LINPEAS, ScannerType.LINENUM, ScannerType.LINUX_EXPLOIT_SUGGESTER,
+            ScannerType.RESPONDER,
         ]
     }
 }

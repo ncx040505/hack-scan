@@ -243,3 +243,262 @@ class KaliArpscanScanner(KaliBaseScanner):
                     location=match.group(1),
                     raw_data={"ip": match.group(1), "mac": match.group(2), "vendor": match.group(3).strip()}
                 )
+
+
+class KaliSubfinderScanner(KaliBaseScanner):
+    """Subfinder 子域名枚举工具"""
+    scanner_type = ScannerType.SUBFINDER
+    
+    def get_tool_name(self) -> str:
+        return "subfinder"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        # 清理目标，提取域名
+        clean_target = target.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+        return ["-d", clean_target, "-silent", "-json"]
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                host = data.get("host", "")
+                if host:
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name=f"子域名: {host}",
+                        severity="info",
+                        category="subdomain",
+                        description=f"Subfinder 发现子域名 {host}",
+                        location=host,
+                        raw_data=data,
+                    )
+            except json.JSONDecodeError:
+                # 非 JSON 行可能是纯文本子域名
+                if "." in line and " " not in line:
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name=f"子域名: {line}",
+                        severity="info",
+                        category="subdomain",
+                        description=f"Subfinder 发现子域名 {line}",
+                        location=line,
+                    )
+
+
+class KaliAmassScanner(KaliBaseScanner):
+    """Amass 子域名枚举与资产发现工具"""
+    scanner_type = ScannerType.AMASS
+    
+    def get_tool_name(self) -> str:
+        return "amass"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        clean_target = target.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+        return ["enum", "-passive", "-d", clean_target, "-json", "/dev/stdout"]
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                name = data.get("name", "")
+                domain = data.get("domain", "")
+                addresses = data.get("addresses", [])
+                addr_str = ", ".join(a.get("ip", "") for a in addresses if a.get("ip")) if addresses else ""
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"子域名: {name}",
+                    severity="info",
+                    category="subdomain",
+                    description=f"Amass 发现子域名 {name} (父域: {domain})" + (f", IP: {addr_str}" if addr_str else ""),
+                    location=name,
+                    raw_data=data,
+                )
+            except json.JSONDecodeError:
+                continue
+
+
+class KaliDirbScanner(KaliBaseScanner):
+    """Dirb 目录枚举工具"""
+    scanner_type = ScannerType.DIRB
+    
+    def get_tool_name(self) -> str:
+        return "dirb"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        wordlist = config.get("wordlist", "/usr/share/wordlists/dirb/common.txt")
+        return [url, wordlist, "-S", "-r"]  # -S 静默, -r 递归不进子目录
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        current_dir = ""
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if line.startswith("+"):
+                # 格式: + DIRECTORY (status-code) http://target/path
+                match = re.search(r'\+\s+\S+\s+\((\d+)\)\s+(\S+)', line)
+                if match:
+                    status = match.group(1)
+                    path = match.group(2)
+                    severity = "info"
+                    category = "directory"
+                    # 高状态码可能表示管理界面
+                    if status in ("200", "301", "302") and any(kw in path.lower() for kw in ["admin", "login", "backup", "config", "shell", "upload"]):
+                        severity = "low"
+                        category = "sensitive_directory"
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name=f"发现目录: {path} [{status}]",
+                        severity=severity,
+                        category=category,
+                        description=f"Dirb 发现路径 {path} (HTTP {status})",
+                        location=path,
+                        raw_data={"status": status, "path": path},
+                    )
+
+
+class KaliDigScanner(KaliBaseScanner):
+    """Dig DNS 枚举工具"""
+    scanner_type = ScannerType.DIG
+
+    def get_tool_name(self) -> str:
+        return "dig"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        record_type = config.get("dns_record", "ANY")
+        return ["+noall", "+answer", target, record_type]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if not line or line.startswith(";"):
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                name = parts[0].rstrip(".")
+                ttl = parts[1]
+                rtype = parts[2]
+                value = " ".join(parts[3:]).rstrip(".")
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"DNS 记录: {rtype} {name}",
+                    severity="info",
+                    category="dns",
+                    description=f"DNS {rtype} 记录: {name} -> {value} (TTL: {ttl})",
+                    location=name,
+                    raw_data={"name": name, "ttl": ttl, "type": rtype, "value": value},
+                )
+
+
+class KaliWhoisScanner(KaliBaseScanner):
+    """WHOIS 域名/IP 查询工具"""
+    scanner_type = ScannerType.WHOIS
+
+    def get_tool_name(self) -> str:
+        return "whois"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        return [target]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        info_fields = {}
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if line.startswith("%") or not line or ":" not in line:
+                continue
+            key, _, value = line.partition(":")
+            key = key.strip().lower()
+            value = value.strip()
+            if key and value:
+                info_fields[key] = value
+
+        interesting_keys = ["registrar", "creation date", "registry expiry date",
+                            "name server", " registrant org", "admin email", "tech email"]
+        summary_parts = []
+        for k in interesting_keys:
+            if k in info_fields:
+                summary_parts.append(f"{k}: {info_fields[k]}")
+
+        yield ScanFinding(
+            scanner=self.scanner_type,
+            name=f"WHOIS 查询: {target}",
+            severity="info",
+            category="whois",
+            description="\n".join(summary_parts[:10]) if summary_parts else f"WHOIS 查询 {target}",
+            location=target,
+            evidence=stdout[:2000],
+            raw_data=info_fields,
+        )
+
+
+class KaliArpingScanner(KaliBaseScanner):
+    """ARP Ping 扫描器"""
+    scanner_type = ScannerType.ARPING
+
+    def get_tool_name(self) -> str:
+        return "arping"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        count = config.get("arping_count", "3")
+        return ["-c", count, target]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        alive = "0 received" not in stdout and ("bytes from" in stdout.lower() or "reply from" in stdout.lower())
+        if alive:
+            mac_match = re.search(r'([0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2})', stdout)
+            mac = mac_match.group(1) if mac_match else "unknown"
+            yield ScanFinding(
+                scanner=self.scanner_type,
+                name=f"ARP 存活: {target}",
+                severity="info",
+                category="host_discovery",
+                description=f"ARP Ping 确认 {target} 在线 (MAC: {mac})",
+                location=target,
+                raw_data={"target": target, "mac": mac, "alive": True},
+            )
+
+class KaliFierceScanner(KaliBaseScanner):
+    """Fierce DNS 枚举和主机发现工具"""
+    scanner_type = ScannerType.DNS
+
+    def get_tool_name(self) -> str:
+        return "fierce"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        clean_target = target.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+        return ["--domain", clean_target, "--subdomain-file", "/dev/null"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Fierce 输出格式: found host xxx.xxx.xxx.xxx
+            match = re.search(r'found host\s+(\S+)\s*\(?(\S+)?\)?', line, re.IGNORECASE)
+            if match:
+                ip = match.group(1)
+                hostname = match.group(2) or ip
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"主机发现: {hostname} ({ip})",
+                    severity="info",
+                    category="dns_host",
+                    description=f"Fierce 发现主机 {hostname} ({ip})",
+                    location=ip,
+                    raw_data={"ip": ip, "hostname": hostname},
+                )
+            elif "DNS" in line and "record" in line.lower():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"DNS 发现",
+                    severity="info",
+                    category="dns_record",
+                    description=line,
+                    location=target,
+                )

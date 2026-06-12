@@ -240,3 +240,263 @@ class KaliYaraScanner(KaliBaseScanner):
                     evidence=line,
                     raw_data={"rule": rule_name, "file": matched_file}
                 )
+
+
+class KaliZapScanner(KaliBaseScanner):
+    """OWASP ZAP 基线扫描器 - Web 应用安全扫描"""
+    scanner_type = ScannerType.ZAP
+    
+    def get_tool_name(self) -> str:
+        return "zap-cli"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        return ["quick-scan", "-s", "xss,sqli,info", "-r", "html", url]
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        # 解析 ZAP 的告警输出
+        current_alert = {}
+        for line in output.split("\n"):
+            line = line.strip()
+            if line.startswith("Alert:"):
+                if current_alert:
+                    yield self._make_finding(current_alert, target)
+                current_alert = {"name": line[6:].strip()}
+            elif "Risk:" in line or "risk:" in line.lower():
+                risk = line.split(":", 1)[1].strip().lower()
+                current_alert["risk"] = risk
+            elif "URL:" in line or "url:" in line.lower():
+                current_alert["url"] = line.split(":", 1)[1].strip()
+            elif "Description:" in line:
+                current_alert["description"] = line.split(":", 1)[1].strip()
+            elif "Solution:" in line:
+                current_alert["solution"] = line.split(":", 1)[1].strip()
+        
+        if current_alert:
+            yield self._make_finding(current_alert, target)
+    
+    def _make_finding(self, alert: dict, target: str) -> ScanFinding:
+        risk = alert.get("risk", "medium")
+        severity_map = {"high": "high", "medium": "medium", "low": "low", "informational": "info", "info": "info"}
+        severity = severity_map.get(risk, "medium")
+        
+        desc = alert.get("description", "")
+        solution = alert.get("solution", "")
+        if solution:
+            desc += f"\n修复建议: {solution}"
+        
+        return ScanFinding(
+            scanner=self.scanner_type,
+            name=f"ZAP: {alert.get('name', '未知告警')}",
+            severity=severity,
+            category="web_vulnerability",
+            description=desc,
+            location=alert.get("url", target),
+            evidence=alert.get("name", ""),
+            raw_data=alert,
+        )
+
+
+class KaliWafw00fScanner(KaliBaseScanner):
+    """WafW00f Web 应用防火墙检测工具"""
+    scanner_type = ScannerType.WAFW00F
+
+    def get_tool_name(self) -> str:
+        return "wafw00f"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        return ["-a", url, "-o", "/dev/stdout", "-f", "json"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        try:
+            data = json.loads(stdout)
+            results = data.get("results", []) if isinstance(data, dict) else []
+            for entry in results:
+                firewall = entry.get("firewall", "Unknown")
+                url = entry.get("url", target)
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WAF 检测: {firewall}",
+                    severity="info",
+                    category="waf_detection",
+                    description=f"目标 {url} 使用 {firewall} WAF",
+                    location=url,
+                    raw_data=entry,
+                )
+        except json.JSONDecodeError:
+            for line in stdout.split("\n"):
+                if "behind" in line.lower() or "waf" in line.lower():
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name="WAF 检测",
+                        severity="info",
+                        category="waf_detection",
+                        description=line.strip(),
+                        location=target,
+                        evidence=line,
+                    )
+
+
+class KaliMsfconsoleScanner(KaliBaseScanner):
+    """Metasploit Framework 漏洞利用扫描器"""
+    scanner_type = ScannerType.MSFCONSOLE
+
+    def get_tool_name(self) -> str:
+        return "msfconsole"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        module = config.get("msf_module", "auxiliary/scanner/portscan/tcp")
+        return ["-q", "-x", f"use {module}; set RHOSTS {target}; run; exit", "--no-color"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            if "[+]" in line:
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"Metasploit 发现: {line[:60]}",
+                    severity="medium",
+                    category="msf_finding",
+                    description=line,
+                    location=target,
+                    evidence=line,
+                    raw_data={"raw": line},
+                )
+            elif "[*]" in line and ("found" in line.lower() or "open" in line.lower() or "vuln" in line.lower()):
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"Metasploit: {line[:60]}",
+                    severity="low",
+                    category="msf_info",
+                    description=line,
+                    location=target,
+                    evidence=line,
+                )
+
+
+class KaliDavtestScanner(KaliBaseScanner):
+    """DAVTest WebDAV 服务器测试工具"""
+    scanner_type = ScannerType.DAVTEST
+
+    def get_tool_name(self) -> str:
+        return "davtest"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        return ["-url", url, "-nocolor"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if "WRITE" in line.upper() and "OK" in line.upper():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WebDAV 写入权限: {target}",
+                    severity="high",
+                    category="webdav_vulnerability",
+                    description=f"WebDAV 服务器允许写入操作: {line}",
+                    location=target,
+                    evidence=line,
+                    raw_data={"raw": line},
+                )
+            elif "TESTING" in line.upper() and "PROPFIND" in line.upper():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WebDAV PROPFIND 可用",
+                    severity="low",
+                    category="webdav_detection",
+                    description=f"WebDAV PROPFIND 方法可用: {line}",
+                    location=target,
+                    evidence=line,
+                )
+
+
+class KaliSubjackScanner(KaliBaseScanner):
+    """Subjack 子域名接管检测工具"""
+    scanner_type = ScannerType.SUBJACK
+
+    def get_tool_name(self) -> str:
+        return "subjack"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        clean_target = target.replace("http://", "").replace("https://", "").split("/")[0]
+        return ["-d", clean_target, "-t", "100", "-timeout", "30", "-ssl", "-a", "/dev/stdout"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if "vulnerable" in line.lower() or "takeover" in line.lower() or "cname" in line.lower():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"子域名接管风险: {line[:60]}",
+                    severity="high",
+                    category="subdomain_takeover",
+                    description=f"Subjack 检测到潜在子域名接管: {line}",
+                    location=target,
+                    evidence=line,
+                    raw_data={"raw": line},
+                )
+            elif "." in line and not line.startswith("-"):
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"子域名扫描: {line}",
+                    severity="info",
+                    category="subdomain",
+                    description=f"Subjack 扫描子域名: {line}",
+                    location=line,
+                )
+
+
+class KaliNmapVulnScanner(KaliBaseScanner):
+    """Nmap 漏洞脚本扫描器"""
+    scanner_type = ScannerType.NMAP_VULN
+
+    def get_tool_name(self) -> str:
+        return "nmap"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        return ["-sV", "--script", "vuln,exploit", "-T4", "-Pn", "-oX", "-", target]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(stdout)
+        except Exception:
+            for line in stdout.split("\n"):
+                line = line.strip()
+                if "VULNERABLE" in line.upper() or "CVE-" in line:
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name=f"Nmap 漏洞: {line[:60]}",
+                        severity="high",
+                        category="vulnerability",
+                        description=line,
+                        location=target,
+                        evidence=line,
+                    )
+            return
+
+        for host in root.findall(".//host"):
+            for port in host.findall(".//port"):
+                portid = port.get("portid", "")
+                for script in port.findall(".//script"):
+                    script_id = script.get("id", "")
+                    output = script.get("output", "")
+                    if "VULNERABLE" in output.upper() or "CVE" in output.upper():
+                        severity = "critical" if "VULNERABLE" in output.upper() else "high"
+                        yield ScanFinding(
+                            scanner=self.scanner_type,
+                            name=f"Nmap 漏洞: {script_id} (port {portid})",
+                            severity=severity,
+                            category="vulnerability",
+                            description=output[:500],
+                            location=f"{target}:{portid}",
+                            evidence=output[:1000],
+                            raw_data={"script": script_id, "output": output},
+                        )

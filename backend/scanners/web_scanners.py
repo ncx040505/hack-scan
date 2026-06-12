@@ -366,3 +366,171 @@ class KaliNewmanScanner(KaliBaseScanner):
                     )
         except json.JSONDecodeError:
             pass
+
+
+class KaliSmbmapScanner(KaliBaseScanner):
+    """SMBMap SMB 共享枚举工具"""
+    scanner_type = ScannerType.SMBMAP
+
+    def get_tool_name(self) -> str:
+        return "smbmap"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        user = config.get("smb_user", "guest")
+        args = ["-H", target, "-u", user]
+        if config.get("smb_pass"):
+            args.extend(["-p", config["smb_pass"]])
+        args.extend(["-q", "--no-color"])
+        return args
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("-") or line.startswith("Disk"):
+                continue
+            parts = line.split()
+            if len(parts) >= 2:
+                share_name = parts[0]
+                perms = parts[1] if len(parts) > 1 else "unknown"
+                severity = "medium" if "READ" in perms.upper() or "WRITE" in perms.upper() else "info"
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"SMB 共享: {share_name}",
+                    severity=severity,
+                    category="smb_shares",
+                    description=f"SMB 共享 {share_name}, 权限: {perms}",
+                    location=f"{target}/{share_name}",
+                    raw_data={"share": share_name, "permissions": perms},
+                )
+
+
+class KaliNbtscanScanner(KaliBaseScanner):
+    """Nbtscan NetBIOS 名称扫描器"""
+    scanner_type = ScannerType.NBTSCAN
+
+    def get_tool_name(self) -> str:
+        return "nbtscan"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        return ["-v", "-e", target]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("Checking") or line.startswith("NetBIOS"):
+                continue
+            parts = line.split()
+            if len(parts) >= 5:
+                ip = parts[0]
+                name = parts[1]
+                server_type = parts[2] if len(parts) > 2 else ""
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"NetBIOS: {name} ({ip})",
+                    severity="info",
+                    category="netbios",
+                    description=f"NetBIOS 名称: {name}, 类型: {server_type}, IP: {ip}",
+                    location=ip,
+                    raw_data={"ip": ip, "name": name, "type": server_type},
+                )
+
+
+class KaliCurlScanner(KaliBaseScanner):
+    """Curl HTTP 探测工具"""
+    scanner_type = ScannerType.CURL_PROBE
+
+    def get_tool_name(self) -> str:
+        return "curl"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        return ["-sI", url]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        headers = {}
+        for line in stdout.split("\n"):
+            line = line.strip()
+            if ":" in line and not line.startswith("HTTP"):
+                key, _, value = line.partition(":")
+                headers[key.strip().lower()] = value.strip()
+
+        security_headers = {
+            "strict-transport-security": "HSTS",
+            "x-frame-options": "X-Frame-Options",
+            "x-content-type-options": "X-Content-Type-Options",
+            "x-xss-protection": "X-XSS-Protection",
+            "content-security-policy": "CSP",
+        }
+        missing = [name for header, name in security_headers.items() if header not in headers]
+
+        if missing:
+            yield ScanFinding(
+                scanner=self.scanner_type,
+                name="缺少安全响应头",
+                severity="low",
+                category="security_headers",
+                description=f"缺少安全头: {', '.join(missing)}",
+                location=target,
+                raw_data={"missing": missing, "headers": headers},
+            )
+
+        server = headers.get("server", "")
+        if server:
+            yield ScanFinding(
+                scanner=self.scanner_type,
+                name=f"服务器信息泄露: {server}",
+                severity="info",
+                category="info_disclosure",
+                description=f"服务器头暴露: {server}",
+                location=target,
+                raw_data={"server": server},
+            )
+
+
+class KaliWpscanScanner(KaliBaseScanner):
+    """WPScan WordPress 漏洞扫描器"""
+    scanner_type = ScannerType.WPSCAN
+
+    def get_tool_name(self) -> str:
+        return "wpscan"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        url = target if target.startswith("http") else f"http://{target}"
+        return ["--url", url, "--no-color", "--format", "cli-no-colour"]
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        current_section = ""
+        for line in output.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if "WordPress version" in line:
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WordPress 版本: {line.split(':', 1)[-1].strip() if ':' in line else line}",
+                    severity="info",
+                    category="cms_detection",
+                    description=line,
+                    location=target,
+                )
+            elif "Title:" in line and "http" in line.lower():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WordPress 主题: {line.split(':', 1)[-1].strip() if ':' in line else line}",
+                    severity="info",
+                    category="theme_detection",
+                    description=line,
+                    location=target,
+                )
+            elif "[!]" in line or "vulnerability" in line.lower() or "cve" in line.lower():
+                severity = "high" if "vulnerability" in line.lower() else "medium"
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"WordPress 告警: {line[:60]}",
+                    severity=severity,
+                    category="wordpress_vulnerability",
+                    description=line,
+                    location=target,
+                    evidence=line,
+                )

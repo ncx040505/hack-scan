@@ -231,3 +231,114 @@ class KaliEnum4linuxScanner(KaliBaseScanner):
                         location=target,
                         raw_data={"raw": line}
                     )
+
+
+class KaliJohnScanner(KaliBaseScanner):
+    """John the Ripper 密码破解工具"""
+    scanner_type = ScannerType.JOHN
+    
+    def get_tool_name(self) -> str:
+        return "john"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        wordlist = config.get("wordlist", "/usr/share/wordlists/rockyou.txt")
+        format_opt = config.get("john_format")
+        args = ["--wordlist=" + wordlist]
+        if format_opt:
+            args.append("--format=" + format_opt)
+        args.append(target)
+        return args
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            # 匹配 John 成功破解的行，格式如: password123   (user1)
+            if "(" in line and ")" in line and not line.startswith("--") and not line.startswith("Loaded"):
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"密码破解成功",
+                    severity="critical",
+                    category="credential_found",
+                    description=f"John the Ripper 成功破解密码: {line}",
+                    location=target,
+                    evidence=line,
+                    raw_data={"raw": line},
+                )
+
+
+class KaliPatatorScanner(KaliBaseScanner):
+    """Patator 多协议暴力破解工具"""
+    scanner_type = ScannerType.PATATOR
+    
+    def get_tool_name(self) -> str:
+        return "patator"
+    
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        module = config.get("patator_module", "ftp_login")
+        user = config.get("patator_user", "admin")
+        password_list = config.get("patator_passlist", "/usr/share/wordlists/rockyou.txt")
+        
+        args = [
+            f"{module} host={target} user={user} password=FILE0",
+            f"0={password_list}",
+            "-x", "ignore:fgrep='Login incorrect.'",
+            "-t", "1",
+            "--timeout", "10",
+        ]
+        return args
+    
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            # 匹配 Patator 成功行
+            if "200" in line or "SUCCESS" in line.upper() or "230" in line:
+                if any(kw in line.lower() for kw in ["login", "authenticated", "success"]):
+                    yield ScanFinding(
+                        scanner=self.scanner_type,
+                        name=f"凭证发现: {config.get('patator_module', 'unknown')}",
+                        severity="critical",
+                        category="credential_found",
+                        description=f"Patator 暴力破解成功: {line}",
+                        location=target,
+                        evidence=line,
+                        raw_data={"raw": line, "module": config.get("patator_module")},
+                    )
+
+
+class KaliCrowbarScanner(KaliBaseScanner):
+    """Crowbar 暴力破解工具"""
+    scanner_type = ScannerType.CROWBAR
+
+    def get_tool_name(self) -> str:
+        return "crowbar"
+
+    def build_command_args(self, target: str, config: dict) -> List[str]:
+        service = config.get("crowbar_service", "rdp")
+        user = config.get("crowbar_user", "admin")
+        password_list = config.get("crowbar_passlist", "/usr/share/wordlists/rockyou.txt")
+        port = config.get("crowbar_port")
+
+        args = ["-b", service, "-s", target]
+        if port:
+            args.extend(["-p", str(port)])
+        args.extend(["-u", user])
+        args.extend(["-C", password_list])
+        return args
+
+    async def parse_output(self, stdout: str, stderr: str, target: str, config: dict) -> AsyncIterator[ScanFinding]:
+        output = stdout + "\n" + stderr
+        for line in output.split("\n"):
+            line = line.strip()
+            if "SUCCESS" in line.upper() or "FOUND" in line.upper():
+                yield ScanFinding(
+                    scanner=self.scanner_type,
+                    name=f"凭证发现: {config.get('crowbar_service', 'rdp')}",
+                    severity="critical",
+                    category="credential_found",
+                    description=f"Crowbar 暴力破解成功: {line}",
+                    location=target,
+                    evidence=line,
+                    raw_data={"raw": line, "service": config.get("crowbar_service", "rdp")},
+                )

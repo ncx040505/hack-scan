@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -544,6 +544,264 @@ async def get_tool_info(tool_name: str):
         version=version,
         path=path
     )
+
+
+# ============= Nuclei 模板 =============
+
+# 常见的 Nuclei 模板目录
+NUCLEI_TEMPLATES_DIRS = [
+    Path("/root/nuclei-templates"),
+    Path.home() / "nuclei-templates",
+    Path("/opt/nuclei-templates"),
+    Path("/usr/share/nuclei-templates"),
+]
+
+# 模板分类映射（基于目录名）
+TEMPLATE_CATEGORY_MAP = {
+    "http": "HTTP 漏洞",
+    "network": "网络协议",
+    "dns": "DNS 检测",
+    "ssl": "SSL/TLS",
+    "file": "文件检测",
+    "headless": "无头浏览器",
+    "websocket": "WebSocket",
+    "whois": "WHOIS",
+    "code": "代码审计",
+    "cloud": "云安全",
+    "javascript": "JavaScript",
+    "misconfiguration": "错误配置",
+    "exposures": "信息泄露",
+    "cves": "CVE 漏洞",
+    "cnvd": "CNVD 漏洞",
+    "cnnvd": "CNNVD 漏洞",
+    "default-logins": "默认凭据",
+    "Exposed-Panels": "暴露面板",
+    "file/keys": "密钥泄露",
+    "takeovers": "子域接管",
+    "token-spray": "Token 检测",
+    "helpers": "辅助模板",
+    "workflow": "工作流",
+}
+
+# 模板严重级别关键字到标签的映射
+SEVERITY_KEYWORDS = {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+    "info": "info",
+}
+
+
+def _find_nuclei_templates_dir() -> Optional[Path]:
+    """查找 Nuclei 模板目录"""
+    for d in NUCLEI_TEMPLATES_DIRS:
+        if d.is_dir() and any(d.iterdir()):
+            return d
+    # 尝试从 nuclei 命令获取
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nuclei", "-version"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.split("\n"):
+            if "templates" in line.lower() and "/" in line:
+                # 提取路径
+                parts = line.split()
+                for part in parts:
+                    p = Path(part.strip())
+                    if p.is_dir():
+                        return p
+    except Exception:
+        pass
+    return None
+
+
+class NucleiTemplateInfo(BaseModel):
+    """Nuclei 模板信息"""
+    id: str
+    name: str
+    path: str
+    category: str
+    severity: str
+    file_size: int
+    tags: List[str] = []
+
+
+class NucleiTemplateList(BaseModel):
+    """Nuclei 模板列表"""
+    total: int
+    items: List[NucleiTemplateInfo]
+    templates_dir: str
+
+
+@app.get("/nuclei-templates", response_model=NucleiTemplateList)
+async def list_nuclei_templates(
+    category: Optional[str] = Query(None, description="模板分类过滤"),
+    severity: Optional[str] = Query(None, description="严重级别过滤"),
+    search: Optional[str] = Query(None, description="搜索关键字"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """列出 Kali 容器中的 Nuclei 模板"""
+    templates_dir = _find_nuclei_templates_dir()
+    
+    if not templates_dir or not templates_dir.is_dir():
+        return NucleiTemplateList(total=0, items=[], templates_dir="")
+    
+    # 收集所有 YAML 模板文件
+    all_templates: List[NucleiTemplateInfo] = []
+    
+    for yaml_file in templates_dir.rglob("*.yaml"):
+        try:
+            rel_path = yaml_file.relative_to(templates_dir)
+            parts = list(rel_path.parts)
+            
+            # 确定分类
+            cat = parts[0] if parts else "other"
+            mapped_category = TEMPLATE_CATEGORY_MAP.get(cat, cat)
+            
+            # 从文件名提取 ID
+            template_id = yaml_file.stem
+            
+            # 从文件路径提取标签
+            tags = []
+            if len(parts) > 1:
+                # 子目录名作为标签
+                tags.extend(parts[:-1])
+            
+            # 快速读取文件头部提取元数据
+            name = template_id
+            severity_val = "info"
+            
+            try:
+                with open(yaml_file, 'r', errors='ignore') as f:
+                    # 只读取前 30 行以提高性能
+                    for i, line in enumerate(f):
+                        if i >= 30:
+                            break
+                        line = line.strip()
+                        if line.startswith('name:'):
+                            raw_name = line[5:].strip().strip('"').strip("'")
+                            if raw_name:
+                                name = raw_name
+                        elif line.startswith('severity:'):
+                            raw_sev = line[9:].strip().strip('"').strip("'").lower()
+                            if raw_sev in SEVERITY_KEYWORDS:
+                                severity_val = raw_sev
+                        elif line.startswith('tags:'):
+                            raw_tags = line[5:].strip()
+                            for t in raw_tags.split(','):
+                                t = t.strip().strip('"').strip("'")
+                                if t and t not in tags:
+                                    tags.append(t)
+            except Exception:
+                pass
+            
+            # 过滤
+            if category and category.lower() not in mapped_category.lower() and category.lower() != cat.lower():
+                continue
+            if severity and severity.lower() != severity_val:
+                continue
+            if search:
+                search_lower = search.lower()
+                if (search_lower not in name.lower() 
+                    and search_lower not in template_id.lower()
+                    and not any(search_lower in t.lower() for t in tags)):
+                    continue
+            
+            all_templates.append(NucleiTemplateInfo(
+                id=template_id,
+                name=name,
+                path=str(rel_path),
+                category=mapped_category,
+                severity=severity_val,
+                file_size=yaml_file.stat().st_size,
+                tags=tags[:10],  # 限制标签数量
+            ))
+        except Exception as e:
+            logger.debug(f"Skip template {yaml_file}: {e}")
+            continue
+    
+    # 排序：按分类 + 名称
+    all_templates.sort(key=lambda t: (t.category, t.name))
+    
+    total = len(all_templates)
+    items = all_templates[skip:skip + limit]
+    
+    return NucleiTemplateList(
+        total=total,
+        items=items,
+        templates_dir=str(templates_dir)
+    )
+
+
+@app.get("/nuclei-templates/stats")
+async def get_nuclei_templates_stats():
+    """获取 Nuclei 模板统计信息"""
+    templates_dir = _find_nuclei_templates_dir()
+    
+    if not templates_dir or not templates_dir.is_dir():
+        return {"total": 0, "categories": {}, "severities": {}, "templates_dir": ""}
+    
+    categories: Dict[str, int] = {}
+    severities: Dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    total = 0
+    
+    for yaml_file in templates_dir.rglob("*.yaml"):
+        total += 1
+        rel_path = yaml_file.relative_to(templates_dir)
+        parts = list(rel_path.parts)
+        cat = parts[0] if parts else "other"
+        mapped = TEMPLATE_CATEGORY_MAP.get(cat, cat)
+        categories[mapped] = categories.get(mapped, 0) + 1
+        
+        # 快速读取严重级别
+        try:
+            with open(yaml_file, 'r', errors='ignore') as f:
+                for i, line in enumerate(f):
+                    if i >= 20:
+                        break
+                    if line.strip().startswith('severity:'):
+                        sev = line.strip().split(':', 1)[1].strip().strip('"').strip("'").lower()
+                        if sev in severities:
+                            severities[sev] += 1
+                        break
+        except Exception:
+            pass
+    
+    return {
+        "total": total,
+        "categories": categories,
+        "severities": severities,
+        "templates_dir": str(templates_dir),
+    }
+
+
+@app.get("/nuclei-templates/content")
+async def get_nuclei_template_content(
+    path: str = Query(..., description="模板相对路径")
+):
+    """读取 Nuclei 模板文件内容"""
+    templates_dir = _find_nuclei_templates_dir()
+    
+    if not templates_dir:
+        raise HTTPException(status_code=404, detail="Nuclei 模板目录不存在")
+    
+    # 安全检查：防止路径遍历
+    template_path = (templates_dir / path).resolve()
+    if not str(template_path).startswith(str(templates_dir.resolve())):
+        raise HTTPException(status_code=403, detail="非法路径")
+    
+    if not template_path.is_file():
+        raise HTTPException(status_code=404, detail="模板文件不存在")
+    
+    try:
+        content = template_path.read_text(errors='replace')
+        return {"content": content, "path": path, "size": template_path.stat().st_size}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")
 
 
 # ============= 启动服务 =============

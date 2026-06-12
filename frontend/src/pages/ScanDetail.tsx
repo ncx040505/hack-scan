@@ -15,12 +15,6 @@ const statusLabels: Record<string, string> = {
   CANCELLED: '已取消',
 }
 
-const scanTypeLabels: Record<string, string> = {
-  full: '完整扫描',
-  quick: '资产扫描',
-  custom: '自定义',
-}
-
 // Tab 类型定义
 type TabType = 'sub-agents' | 'vulnerabilities' | 'attack-dialog' | 'attack-path' | 'report' | 'remediation'
 
@@ -32,7 +26,7 @@ interface TabItem {
 
 // Tab 配置
 const tabs: TabItem[] = [
-  { id: 'sub-agents', label: '子智能体编排', icon: <GitBranch className="w-4 h-4" /> },
+  { id: 'sub-agents', label: 'SubAgent 编排', icon: <GitBranch className="w-4 h-4" /> },
   { id: 'vulnerabilities', label: '漏洞信息', icon: <Shield className="w-4 h-4" /> },
   { id: 'attack-dialog', label: '攻击对话', icon: <Terminal className="w-4 h-4" /> },
   { id: 'attack-path', label: '攻击路径', icon: <Route className="w-4 h-4" /> },
@@ -154,7 +148,7 @@ export default function ScanDetail() {
         <div>
           <h1 className="text-2xl font-bold mb-2">{scan.target}</h1>
           <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
-            <span>{scanTypeLabels[scan.scan_type] || scan.scan_type}</span>
+            <span className="capitalize">{scan.scan_type} 扫描</span>
             <span>•</span>
             <span>{format(new Date(scan.created_at), 'yyyy-MM-dd HH:mm')}</span>
             <span>•</span>
@@ -237,39 +231,22 @@ export default function ScanDetail() {
                 <ProgressStep
                   label="初始化"
                   active={displayProgress.phase === 'initializing' || displayProgress.phase === 'queued'}
-                  done={['parallel_sub_agents', 'running_nmap', 'running_vuln', 'running_nuclei', 'ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '')}
+                  done={['parallel_sub_agents', 'running_nmap', 'running_nuclei', 'ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '')}
                 />
                 <ProgressStep
-                  label="侦察"
-                  active={displayProgress.phase === 'running_nmap' || displayProgress.phase === 'parallel_sub_agents' || subAgents.some(agent => agent.id === 'recon-subagent' && agent.status === 'running')}
-                  done={
-                    subAgents.some(agent => agent.id === 'recon-subagent' && agent.status === 'completed') &&
-                    (subAgents.some(agent => ['vulnerability-subagent', 'web-testing-subagent'].includes(agent.id) && (agent.status === 'running' || agent.status === 'completed' || (agent.progress || 0) > 0)) || ['ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || ''))
-                  }
+                  label="端口扫描"
+                  active={displayProgress.phase === 'running_nmap' || displayProgress.phase === 'parallel_sub_agents'}
+                  done={['ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'recon-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="漏洞扫描"
-                  active={displayProgress.phase === 'running_nuclei' || displayProgress.phase === 'running_vuln' || displayProgress.phase === 'parallel_sub_agents' || subAgents.some(agent => agent.id === 'vulnerability-subagent' && agent.status === 'running')}
-                  done={
-                    subAgents.some(agent => agent.id === 'vulnerability-subagent' && agent.status === 'completed') &&
-                    (subAgents.some(agent => ['ai-validation-subagent', 'web-testing-subagent'].includes(agent.id) && (agent.status === 'running' || agent.status === 'completed' || agent.status === 'waiting_input') && (agent.progress || 0) >= 30) || ['llm_analysis', 'completed'].includes(displayProgress.phase || ''))
-                  }
-                />
-                <ProgressStep
-                  label="Web 测试"
-                  active={subAgents.some(agent => agent.id === 'web-testing-subagent' && agent.status === 'running')}
-                  done={
-                    subAgents.some(agent => agent.id === 'web-testing-subagent' && agent.status === 'completed') ||
-                    (subAgents.some(agent => agent.id === 'ai-validation-subagent' && agent.status === 'completed') && !subAgents.some(agent => agent.id === 'web-testing-subagent' && agent.status !== 'completed'))
-                  }
+                  active={displayProgress.phase === 'running_nuclei' || displayProgress.phase === 'parallel_sub_agents'}
+                  done={['ai_agent', 'llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'vulnerability-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="AI 测试"
                   active={displayProgress.phase === 'ai_agent'}
-                  done={
-                    subAgents.some(agent => agent.id === 'ai-validation-subagent' && agent.status === 'completed') ||
-                    ['llm_analysis', 'completed'].includes(displayProgress.phase || '')
-                  }
+                  done={['llm_analysis', 'completed'].includes(displayProgress.phase || '') || subAgents.some(agent => agent.id === 'ai-validation-subagent' && agent.status === 'completed')}
                 />
                 <ProgressStep
                   label="AI 分析"
@@ -282,7 +259,7 @@ export default function ScanDetail() {
         </div>
       )}
 
-      {isActive && <SubAgentOverview subAgents={subAgents} isActive={isActive} />}
+      <SubAgentOverview subAgents={subAgents} isActive={isActive} />
 
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
@@ -383,41 +360,29 @@ function getDisplayProgress(progress: any, subAgents: SubAgentTask[], scan: any)
 
   if (runningAgents.length > 0) {
     const runningNames = runningAgents.map(agent => agent.name).join('、')
-    const hasParallelInitialScan = runningAgents.some(agent =>
-      ['recon-subagent', 'vulnerability-subagent', 'web-testing-subagent',
-        'directory-subagent', 'ssl-subagent', 'credential-subagent', 'post-exploit-subagent'].includes(agent.id)
-    )
+    const hasParallelInitialScan = runningAgents.some(agent => ['recon-subagent', 'vulnerability-subagent'].includes(agent.id))
     return {
       phase: hasParallelInitialScan ? 'parallel_sub_agents' : runningAgents[0].phase || progress?.phase || 'running',
-      message: `子智能体执行中：${runningNames}`,
+      message: `SubAgent 执行中：${runningNames}`,
     }
   }
 
   if (byId['reporting-subagent']?.status === 'completed' || scan?.status === 'COMPLETED') {
-    return { phase: 'completed', message: '子智能体编排完成' }
+    return { phase: 'completed', message: 'SubAgent 编排完成' }
   }
   if (byId['ai-validation-subagent']?.status === 'completed') {
-    return { phase: 'llm_analysis', message: '报告生成子智能体正在生成报告...' }
-  }
-  if (byId['post-exploit-subagent']?.status === 'completed') {
-    return { phase: 'post_exploit_done', message: '后渗透检查完成，等待 AI 验证...' }
-  }
-  if (byId['credential-subagent']?.status === 'completed') {
-    return { phase: 'credential_done', message: '凭证测试完成，等待其他扫描...' }
-  }
-  if (byId['web-testing-subagent']?.status === 'completed') {
-    return { phase: 'web_done', message: 'Web 测试完成，等待其他扫描...' }
+    return { phase: 'llm_analysis', message: 'Reporting SubAgent 正在生成报告...' }
   }
   if (byId['vulnerability-subagent']?.status === 'completed') {
-    return { phase: 'ai_agent', message: 'AI 验证子智能体正在验证发现...' }
+    return { phase: 'ai_agent', message: 'AI Validation SubAgent 正在验证发现...' }
   }
   if (byId['recon-subagent']?.status === 'completed') {
-    return { phase: 'running_vuln', message: '漏洞扫描子智能体正在验证漏洞...' }
+    return { phase: 'running_nuclei', message: 'Vulnerability SubAgent 正在验证漏洞...' }
   }
 
   return {
     phase: progress?.phase || null,
-    message: progress?.message || '主 Agent 正在编排子智能体...',
+    message: progress?.message || '主 Agent 正在编排 SubAgent...',
   }
 }
 
@@ -429,57 +394,12 @@ function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): Su
   )
   if (fromApi?.length && !apiLooksStale) return fromApi
 
-  // 检测各种扫描器的日志
   const hasNmap = logs.some(log => log.tool?.toLowerCase() === 'nmap' || log.message.toLowerCase().includes('nmap'))
   const nmapDone = logs.some(log => log.message.includes('NMAP 扫描完成'))
   const hasNuclei = logs.some(log => log.tool?.toLowerCase() === 'nuclei' || log.message.toLowerCase().includes('nuclei'))
   const nucleiDone = logs.some(log => log.message.includes('NUCLEI 扫描完成'))
-  const hasNikto = logs.some(log => log.tool?.toLowerCase() === 'nikto' || log.message.toLowerCase().includes('nikto'))
-  const niktoDone = logs.some(log => log.message.includes('NIKTO 扫描完成'))
-  const hasGobuster = logs.some(log => log.tool?.toLowerCase() === 'gobuster' || log.message.toLowerCase().includes('gobuster'))
-  const gobusterDone = logs.some(log => log.message.includes('GOBUSTER 扫描完成'))
-  const hasSqlmap = logs.some(log => log.tool?.toLowerCase() === 'sqlmap' || log.message.toLowerCase().includes('sqlmap'))
-  const sqlmapDone = logs.some(log => log.message.includes('SQLMAP 扫描完成'))
-  const hasWhatweb = logs.some(log => log.tool?.toLowerCase() === 'whatweb' || log.message.toLowerCase().includes('whatweb'))
-  const whatwebDone = logs.some(log => log.message.includes('WHATWEB 扫描完成'))
-  const hasSslscan = logs.some(log => log.tool?.toLowerCase() === 'sslscan' || log.message.toLowerCase().includes('sslscan'))
-  const sslscanDone = logs.some(log => log.message.includes('SSLSCAN 扫描完成'))
-
-  // 新增扫描器检测
-  const hasMasscan = logs.some(log => log.tool?.toLowerCase() === 'masscan' || log.message.toLowerCase().includes('masscan'))
-  const hasNaabu = logs.some(log => log.tool?.toLowerCase() === 'naabu' || log.message.toLowerCase().includes('naabu'))
-  const hasRustscan = logs.some(log => log.tool?.toLowerCase() === 'rustscan' || log.message.toLowerCase().includes('rustscan'))
-  const hasHttpx = logs.some(log => log.tool?.toLowerCase() === 'httpx' || log.message.toLowerCase().includes('httpx'))
-  const hasKatana = logs.some(log => log.tool?.toLowerCase() === 'katana' || log.message.toLowerCase().includes('katana'))
-  const hasWapiti = logs.some(log => log.tool?.toLowerCase() === 'wapiti' || log.message.toLowerCase().includes('wapiti'))
-  const hasTrivy = logs.some(log => log.tool?.toLowerCase() === 'trivy' || log.message.toLowerCase().includes('trivy'))
-  const hasGrype = logs.some(log => log.tool?.toLowerCase() === 'grype' || log.message.toLowerCase().includes('grype'))
-  const hasLynis = logs.some(log => log.tool?.toLowerCase() === 'lynis' || log.message.toLowerCase().includes('lynis'))
-  const hasSearchsploit = logs.some(log => log.tool?.toLowerCase() === 'searchsploit' || log.message.toLowerCase().includes('searchsploit'))
-  const hasYara = logs.some(log => log.tool?.toLowerCase() === 'yara' || log.message.toLowerCase().includes('yara'))
-  const hasFfuf = logs.some(log => log.tool?.toLowerCase() === 'ffuf' || log.message.toLowerCase().includes('ffuf'))
-  const hasDalfox = logs.some(log => log.tool?.toLowerCase() === 'dalfox' || log.message.toLowerCase().includes('dalfox'))
-  const hasCommix = logs.some(log => log.tool?.toLowerCase() === 'commix' || log.message.toLowerCase().includes('commix'))
-  const hasHydra = logs.some(log => log.tool?.toLowerCase() === 'hydra' || log.message.toLowerCase().includes('hydra'))
-  const hasGitleaks = logs.some(log => log.tool?.toLowerCase() === 'gitleaks' || log.message.toLowerCase().includes('gitleaks'))
-  const hasTrufflehog = logs.some(log => log.tool?.toLowerCase() === 'trufflehog' || log.message.toLowerCase().includes('trufflehog'))
-  const hasLinpeas = logs.some(log => log.tool?.toLowerCase() === 'linpeas' || log.message.toLowerCase().includes('linpeas'))
-
   const hasAi = logs.some(log => log.type === 'llm' || log.message.includes('AI Agent') || log.message.includes('迭代'))
   const hasReport = logs.some(log => log.message.includes('AI 开始生成扫描报告') || log.message.includes('扫描任务完成'))
-
-  // 计算侦察子智能体状态
-  const reconStarted = hasNmap || hasMasscan || hasNaabu || hasRustscan || hasHttpx || hasWhatweb || hasKatana
-  const reconDone = (nmapDone || !hasNmap) && (!hasMasscan || logs.some(log => log.message.includes('MASSCAN 扫描完成'))) &&
-    (!hasWhatweb || whatwebDone) && (!hasHttpx || logs.some(log => log.message.includes('HTTPX 扫描完成')))
-
-  // 计算漏洞扫描子智能体状态
-  const vulnStarted = hasNuclei || hasNikto || hasWapiti || hasTrivy || hasGrype || hasLynis || hasSearchsploit || hasYara
-  const vulnDone = (nucleiDone || !hasNuclei) && (niktoDone || !hasNikto) && (!hasWapiti || logs.some(log => log.message.includes('WAPITI 扫描完成')))
-
-  // 计算 Web 测试子智能体状态
-  const webStarted = hasSqlmap || hasGobuster || hasFfuf || hasDalfox || hasCommix || hasSslscan
-  const webDone = (sqlmapDone || !hasSqlmap) && (gobusterDone || !hasGobuster) && (sslscanDone || !hasSslscan)
 
   const statusFromLogs = (started: boolean, done: boolean): SubAgentTask['status'] => {
     if (done) return 'completed'
@@ -487,126 +407,64 @@ function getDisplaySubAgents(scan: any, progress: any, logs: ScanLogEntry[]): Su
     return 'queued'
   }
 
-  const agents: SubAgentTask[] = [
+  return [
     {
       id: 'recon-subagent',
-      name: '侦察子智能体',
-      role: '资产探测与指纹识别',
-      objective: '识别目标暴露面、开放端口、服务版本与 Web 技术栈。',
-      status: statusFromLogs(reconStarted, reconDone),
-      phase: hasNmap ? 'running_nmap' : hasWhatweb ? 'running_whatweb' : hasHttpx ? 'running_httpx' : null,
-      progress: reconDone ? 100 : reconStarted ? 65 : 0,
+      name: 'Recon SubAgent',
+      role: '资产探测与端口识别',
+      objective: '识别目标暴露面、开放端口与基础服务指纹。',
+      status: statusFromLogs(hasNmap, nmapDone),
+      phase: hasNmap ? 'running_nmap' : null,
+      progress: nmapDone ? 100 : hasNmap ? 65 : 0,
       started_at: null,
       completed_at: null,
-      summary: reconStarted ? `主 Agent 已委派侦察任务${hasNmap ? ' (NMAP)' : ''}${hasWhatweb ? ' (WhatWeb)' : ''}${hasHttpx ? ' (httpx)' : ''}。` : '等待主 Agent 委派侦察任务。',
-      findings_count: logs.filter(log => ['nmap', 'whatweb', 'httpx', 'masscan', 'naabu', 'rustscan', 'katana'].includes(log.tool?.toLowerCase() || '') && log.message.includes('发现')).length,
+      summary: hasNmap ? '由现有执行日志推断：主 Agent 已委派 NMAP 侦察任务。' : '等待主 Agent 委派侦察任务。',
+      findings_count: logs.filter(log => log.tool?.toLowerCase() === 'nmap' && log.message.includes('发现')).length,
       error: null,
     },
     {
       id: 'vulnerability-subagent',
-      name: '漏洞扫描子智能体',
-      role: '漏洞检测与验证',
-      objective: '使用多种工具验证常见漏洞。',
-      status: statusFromLogs(vulnStarted, vulnDone),
-      phase: hasNuclei ? 'running_nuclei' : hasNikto ? 'running_nikto' : hasWapiti ? 'running_wapiti' : null,
-      progress: vulnDone ? 100 : vulnStarted ? 65 : 0,
+      name: 'Vulnerability SubAgent',
+      role: '模板化漏洞验证',
+      objective: '调用漏洞扫描器验证常见 Web 与服务漏洞。',
+      status: statusFromLogs(hasNuclei, nucleiDone),
+      phase: hasNuclei ? 'running_nuclei' : null,
+      progress: nucleiDone ? 100 : hasNuclei ? 65 : 0,
       started_at: null,
       completed_at: null,
-      summary: vulnStarted
-        ? `主 Agent 已委派漏洞扫描任务${hasNuclei ? ' (Nuclei)' : ''}${hasNikto ? ' (Nikto)' : ''}${hasWapiti ? ' (Wapiti)' : ''}。`
-        : '等待侦察结果后启动漏洞验证。',
-      findings_count: logs.filter(log => ['nuclei', 'nikto', 'wapiti', 'trivy', 'grype', 'lynis', 'searchsploit', 'yara'].includes(log.tool?.toLowerCase() || '') && log.message.includes('发现')).length,
+      summary: hasNuclei ? '由现有执行日志推断：主 Agent 已委派 NUCLEI 漏洞验证任务。' : '等待侦察结果后启动漏洞验证。',
+      findings_count: logs.filter(log => log.tool?.toLowerCase() === 'nuclei' && log.message.includes('发现')).length,
+      error: null,
+    },
+    {
+      id: 'ai-validation-subagent',
+      name: 'AI Validation SubAgent',
+      role: '自主安全测试与发现验证',
+      objective: '基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。',
+      status: statusFromLogs(hasAi, (scan?.status === 'COMPLETED' && hasAi) || logs.some(log => log.message.includes('AI Agent 发现') || log.message.includes('AI Validation SubAgent'))),
+      phase: hasAi ? 'ai_agent' : null,
+      progress: scan?.status === 'COMPLETED' && hasAi ? 100 : hasAi ? 70 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasAi ? 'AI Validation SubAgent 正在进行多轮分析、工具调用和结果校验。' : '等待基础扫描结果后启动 AI 验证。',
+      findings_count: logs.filter(log => log.type === 'llm' && log.message.includes('发现')).length,
+      error: null,
+    },
+    {
+      id: 'reporting-subagent',
+      name: 'Reporting SubAgent',
+      role: '风险归纳与报告生成',
+      objective: '汇总各 SubAgent 输出，生成风险评分、修复建议与攻击路径。',
+      status: statusFromLogs(hasReport || scan?.status === 'COMPLETED', scan?.status === 'COMPLETED'),
+      phase: hasReport ? 'llm_analysis' : null,
+      progress: scan?.status === 'COMPLETED' ? 100 : hasReport ? 60 : 0,
+      started_at: null,
+      completed_at: null,
+      summary: hasReport ? 'Reporting SubAgent 正在整理 SubAgent 输出。' : '等待前置 SubAgent 输出后生成报告。',
+      findings_count: scan?.vulnerability_count || 0,
       error: null,
     },
   ]
-
-  // Web 测试子智能体
-  if (webStarted) {
-    agents.push({
-      id: 'web-testing-subagent',
-      name: 'Web 测试子智能体',
-      role: 'Web/API 安全测试',
-      objective: '进行 Web 枚举、参数变异、注入检测等测试。',
-      status: statusFromLogs(webStarted, webDone),
-      phase: hasSqlmap ? 'running_sqlmap' : hasGobuster ? 'running_gobuster' : hasSslscan ? 'running_sslscan' : null,
-      progress: webDone ? 100 : 65,
-      started_at: null,
-      completed_at: null,
-      summary: `主 Agent 已委派 Web 测试任务${hasSqlmap ? ' (SQLMap)' : ''}${hasGobuster ? ' (Gobuster)' : ''}${hasSslscan ? ' (SSLScan)' : ''}。`,
-      findings_count: logs.filter(log => ['sqlmap', 'gobuster', 'ffuf', 'dalfox', 'commix', 'sslscan', 'dirsearch', 'feroxbuster', 'wfuzz', 'xsstrike', 'jwt_tool', 'newman'].includes(log.tool?.toLowerCase() || '') && log.message.includes('发现')).length,
-      error: null,
-    })
-  }
-
-  // 凭证测试子智能体
-  if (hasHydra) {
-    agents.push({
-      id: 'credential-subagent',
-      name: '凭证测试子智能体',
-      role: '凭证与身份验证测试',
-      objective: '在授权环境下进行凭证测试。',
-      status: statusFromLogs(hasHydra, logs.some(log => log.message.includes('HYDRA 扫描完成'))),
-      phase: 'running_hydra',
-      progress: logs.some(log => log.message.includes('HYDRA 扫描完成')) ? 100 : 65,
-      started_at: null,
-      completed_at: null,
-      summary: '主 Agent 已委派凭证测试任务 (Hydra)。',
-      findings_count: logs.filter(log => ['hydra', 'medusa', 'netexec', 'cewl', 'kerbrute', 'enum4linux'].includes(log.tool?.toLowerCase() || '') && log.message.includes('发现')).length,
-      error: null,
-    })
-  }
-
-  // 后渗透子智能体
-  if (hasGitleaks || hasTrufflehog || hasLinpeas) {
-    agents.push({
-      id: 'post-exploit-subagent',
-      name: '后渗透子智能体',
-      role: '后渗透与取证辅助',
-      objective: '进行权限提升检查、敏感信息发现等。',
-      status: statusFromLogs(true, logs.some(log => log.message.includes('GITLEAKS 扫描完成') || log.message.includes('LINPEAS 扫描完成'))),
-      phase: hasGitleaks ? 'running_gitleaks' : 'running_linpeas',
-      progress: 65,
-      started_at: null,
-      completed_at: null,
-      summary: `主 Agent 已委派后渗透任务${hasGitleaks ? ' (Gitleaks)' : ''}${hasLinpeas ? ' (LinPEAS)' : ''}。`,
-      findings_count: logs.filter(log => ['gitleaks', 'trufflehog', 'linpeas', 'linenum', 'linux-exploit-suggester', 'pspy'].includes(log.tool?.toLowerCase() || '') && log.message.includes('发现')).length,
-      error: null,
-    })
-  }
-
-  // AI 验证子智能体
-  agents.push({
-    id: 'ai-validation-subagent',
-    name: 'AI 验证子智能体',
-    role: '自主安全测试与发现验证',
-    objective: '基于主 Agent 上下文执行补充测试、验证发现并提出下一步判断。',
-    status: statusFromLogs(hasAi, (scan?.status === 'COMPLETED' && hasAi) || logs.some(log => log.message.includes('AI Agent 发现') || log.message.includes('AI Validation SubAgent'))),
-    phase: hasAi ? 'ai_agent' : null,
-    progress: scan?.status === 'COMPLETED' && hasAi ? 100 : hasAi ? 70 : 0,
-    started_at: null,
-    completed_at: null,
-    summary: hasAi ? 'AI 验证子智能体正在进行多轮分析、工具调用和结果校验。' : '等待基础扫描结果后启动 AI 验证。',
-    findings_count: logs.filter(log => log.type === 'llm' && log.message.includes('发现')).length,
-    error: null,
-  })
-
-  // 报告生成子智能体
-  agents.push({
-    id: 'reporting-subagent',
-    name: '报告生成子智能体',
-    role: '风险归纳与报告生成',
-    objective: '汇总各子智能体输出，生成风险评分、修复建议与攻击路径。',
-    status: statusFromLogs(hasReport || scan?.status === 'COMPLETED', scan?.status === 'COMPLETED'),
-    phase: hasReport ? 'llm_analysis' : null,
-    progress: scan?.status === 'COMPLETED' ? 100 : hasReport ? 60 : 0,
-    started_at: null,
-    completed_at: null,
-    summary: hasReport ? '报告生成子智能体正在整理子智能体输出。' : '等待前置子智能体输出后生成报告。',
-    findings_count: scan?.vulnerability_count || 0,
-    error: null,
-  })
-
-  return agents
 }
 
 function SubAgentOverview({ subAgents, isActive }: { subAgents: SubAgentTask[]; isActive: boolean }) {
@@ -625,16 +483,16 @@ function SubAgentOverview({ subAgents, isActive }: { subAgents: SubAgentTask[]; 
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-semibold text-purple-900 dark:text-purple-100">主 Agent 正在使用子智能体任务编排</h2>
+              <h2 className="text-lg font-semibold text-purple-900 dark:text-purple-100">主 Agent 正在使用 SubAgent 任务编排</h2>
               {isActive && <span className="px-2 py-0.5 rounded-full text-xs bg-blue-600 text-white animate-pulse">实时编排中</span>}
             </div>
             <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
-              主 Agent 将扫描拆成侦察、漏洞验证、AI 验证、报告生成等多个子智能体，并汇总输出。
+              主 Agent 将扫描拆成侦察、漏洞验证、AI 验证、报告生成 4 个 SubAgent，并汇总输出。
             </p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 min-w-[280px]">
-          <SubAgentMiniStat label="子智能体" value={subAgents.length} />
+          <SubAgentMiniStat label="SubAgent" value={subAgents.length} />
           <SubAgentMiniStat label="运行中" value={running.length} color="text-blue-600" />
           <SubAgentMiniStat label="已完成" value={`${completed}/${subAgents.length}`} color="text-green-600" />
         </div>
@@ -673,9 +531,9 @@ function TabSubAgents({ subAgents, scan }: { subAgents: SubAgentTask[]; scan: an
             <Network className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">子智能体任务编排视图</h2>
+            <h2 className="text-xl font-semibold">SubAgent 任务编排视图</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              这里展示主 Agent 如何分派子任务、跟踪执行状态，并把各子智能体的输出汇总进扫描结果。
+              这里展示主 Agent 如何分派子任务、跟踪执行状态，并把各 SubAgent 的输出汇总进扫描结果。
             </p>
           </div>
         </div>
@@ -862,7 +720,7 @@ function TabAttackDialog({
       <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/60 rounded-lg p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
           <GitBranch className="w-5 h-5 text-purple-600 dark:text-purple-300" />
-          <h2 className="font-semibold text-purple-900 dark:text-purple-100">日志由主 Agent + 子智能体协作产生</h2>
+          <h2 className="font-semibold text-purple-900 dark:text-purple-100">日志由主 Agent + SubAgent 协作产生</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
           {subAgents.map(agent => (
@@ -881,7 +739,7 @@ function TabAttackDialog({
         </div>
         {activeSubAgents.length > 0 && (
           <p className="mt-3 text-xs text-purple-700 dark:text-purple-300">
-            当前活跃子智能体：{activeSubAgents.map(agent => `${agent.name}（${agent.progress}%）`).join('、')}
+            当前活跃 SubAgent：{activeSubAgents.map(agent => `${agent.name}（${agent.progress}%）`).join('、')}
           </p>
         )}
       </div>
@@ -1598,7 +1456,7 @@ function generateMarkdownReport(data: any): string {
 
 ## 扫描信息
 - **目标**: ${data.scan.target}
-- **扫描类型**: ${scanTypeLabels[data.scan.scan_type] || data.scan.scan_type}
+- **扫描类型**: ${data.scan.scan_type}
 - **状态**: ${data.scan.status}
 - **开始时间**: ${data.scan.started_at || '-'}
 - **完成时间**: ${data.scan.completed_at || '-'}
@@ -1695,7 +1553,7 @@ function generateHTMLReport(data: any): string {
     
     <h2>扫描信息</h2>
     <p><strong>目标:</strong> ${data.scan.target}</p>
-    <p><strong>扫描类型:</strong> ${scanTypeLabels[data.scan.scan_type] || data.scan.scan_type}</p>
+    <p><strong>扫描类型:</strong> ${data.scan.scan_type}</p>
     <p><strong>风险评分:</strong> ${data.scan.risk_score ?? '-'}/100</p>
     
     <h2>漏洞统计</h2>

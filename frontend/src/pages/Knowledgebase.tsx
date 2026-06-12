@@ -3,9 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, Search, FileCode, Settings,
   Trash2, Eye, EyeOff, X, Check,
-  Code, List, Zap, File as FileIcon, ChevronDown, ChevronLeft, ChevronRight
+  Code, List, Zap, File as FileIcon, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  Shield, AlertTriangle
 } from 'lucide-react'
-import { getTools, uploadTool, deleteTool, updateTool, getToolContent, SecurityTool } from '../lib/api'
+import {
+  getTools, uploadTool, deleteTool, updateTool, getToolContent, SecurityTool,
+  getNucleiTemplates, getNucleiTemplateStats, getNucleiTemplateContent,
+  NucleiTemplate, getKaliScanners, KaliScannerCategory,
+} from '../lib/api'
 
 const toolTypeIcons: Record<string, React.ReactNode> = {
   script: <FileCode className="w-5 h-5" />,
@@ -34,7 +39,13 @@ export default function Knowledgebase() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTool, setSelectedTool] = useState<SecurityTool | null>(null)
   const [showContent, setShowContent] = useState(false)
+  const [nucleiSeverity, setNucleiSeverity] = useState<string>('')
+  const [selectedTemplate, setSelectedTemplate] = useState<NucleiTemplate | null>(null)
+  const [showTemplateContent, setShowTemplateContent] = useState(false)
 
+  const isNucleiMode = filterType === 'nuclei'
+
+  // 普通工具查询（非 Nuclei 模式时启用）
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['tools', filterType, page, pageSize],
     queryFn: () => getTools({
@@ -43,12 +54,46 @@ export default function Knowledgebase() {
       tool_type: filterType || undefined,
       enabled_only: false
     }),
+    enabled: !isNucleiMode,
+  })
+
+  // Nuclei 模板查询（从 Kali 容器获取）
+  const nucleiQuery = useQuery({
+    queryKey: ['nuclei-templates', page, pageSize, searchQuery, nucleiSeverity],
+    queryFn: () => getNucleiTemplates({
+      skip: (page - 1) * pageSize,
+      limit: pageSize,
+      search: searchQuery || undefined,
+      severity: nucleiSeverity || undefined,
+    }),
+    enabled: isNucleiMode,
+  })
+
+  // Nuclei 模板统计
+  const nucleiStatsQuery = useQuery({
+    queryKey: ['nuclei-templates-stats'],
+    queryFn: getNucleiTemplateStats,
+    enabled: isNucleiMode,
   })
 
   const toolsErrorMessage = isError
     // @ts-expect-error axios error response
     ? (error?.response?.data?.detail || (error as Error).message)
     : null
+
+  const nucleiErrorMessage = nucleiQuery.isError
+    // @ts-expect-error axios error response
+    ? (nucleiQuery.error?.response?.data?.detail || (nucleiQuery.error as Error).message)
+    : null
+
+  // Kali 预置扫描器查询（始终加载，用于统计计数）
+  const kaliScannersQuery = useQuery({
+    queryKey: ['kali-scanners'],
+    queryFn: getKaliScanners,
+    staleTime: 5 * 60 * 1000,
+  })
+  const kaliScannerTotal = kaliScannersQuery.data?.total ?? 0
+  const isScannerMode = filterType === 'scanner'
 
   const deleteMutation = useMutation({
     mutationFn: deleteTool,
@@ -69,7 +114,7 @@ export default function Knowledgebase() {
   const tools = data?.items || []
   const totalItems = data?.total || 0
   const totalPages = Math.ceil(totalItems / pageSize)
-  
+
   // 客户端搜索过滤（在当前页内）
   const filteredTools = tools.filter(t =>
     searchQuery === '' ||
@@ -100,32 +145,43 @@ export default function Knowledgebase() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-6 gap-4 mb-6">
-        <StatCard label="总工具数" value={totalItems} />
-        <StatCard label="脚本" value={tools.filter(t => t.tool_type === 'script').length} />
-        <StatCard label="Nuclei 模板" value={tools.filter(t => t.tool_type === 'nuclei').length} />
-        <StatCard label="字典" value={tools.filter(t => t.tool_type === 'wordlist').length} />
-        <StatCard label="配置" value={tools.filter(t => t.tool_type === 'config').length} />
-        <StatCard label="扫描器" value={tools.filter(t => t.tool_type === 'scanner').length} />
-      </div>
+      {isNucleiMode ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          <StatCard label="模板总数" value={nucleiStatsQuery.data?.total ?? nucleiQuery.data?.total ?? 0} />
+          <StatCard label="严重" value={nucleiStatsQuery.data?.severities?.critical ?? 0} />
+          <StatCard label="高危" value={nucleiStatsQuery.data?.severities?.high ?? 0} />
+          <StatCard label="中危" value={nucleiStatsQuery.data?.severities?.medium ?? 0} />
+          <StatCard label="低危" value={nucleiStatsQuery.data?.severities?.low ?? 0} />
+          <StatCard label="信息" value={nucleiStatsQuery.data?.severities?.info ?? 0} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-6 gap-4 mb-6">
+          <StatCard label="总工具数" value={totalItems} />
+          <StatCard label="脚本" value={tools.filter(t => t.tool_type === 'script').length} />
+          <StatCard label="Nuclei 模板" value={tools.filter(t => t.tool_type === 'nuclei').length} />
+          <StatCard label="字典" value={tools.filter(t => t.tool_type === 'wordlist').length} />
+          <StatCard label="配置" value={tools.filter(t => t.tool_type === 'config').length} />
+          <StatCard label="扫描器" value={tools.filter(t => t.tool_type === 'scanner').length + kaliScannerTotal} />
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow">
-        <div className="flex gap-4 items-center">
-          <div className="flex-1 relative">
+        <div className="flex gap-4 items-center flex-wrap">
+          <div className="flex-1 relative min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
-              placeholder="搜索工具..."
+              placeholder={isNucleiMode ? "搜索模板名称/ID/标签..." : "搜索工具..."}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
               className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div className="flex gap-2">
             <button
-              onClick={() => { setFilterType(''); setPage(1); }}
+              onClick={() => { setFilterType(''); setPage(1); setSearchQuery(''); setNucleiSeverity(''); }}
               className={`px-3 py-2 rounded-lg text-sm ${filterType === '' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
             >
               全部
@@ -133,7 +189,7 @@ export default function Knowledgebase() {
             {Object.entries(toolTypeLabels).map(([type, label]) => (
               <button
                 key={type}
-                onClick={() => { setFilterType(type); setPage(1); }}
+                onClick={() => { setFilterType(type); setPage(1); setSearchQuery(''); setNucleiSeverity(''); }}
                 className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 ${filterType === type ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               >
                 {toolTypeIcons[type]}
@@ -141,82 +197,237 @@ export default function Knowledgebase() {
               </button>
             ))}
           </div>
+
+          {/* Nuclei 严重级别过滤器 */}
+          {isNucleiMode && (
+            <div className="flex gap-2 w-full">
+              {['', 'critical', 'high', 'medium', 'low', 'info'].map(sev => (
+                <button
+                  key={sev}
+                  onClick={() => { setNucleiSeverity(sev); setPage(1); }}
+                  className={`px-2 py-1 rounded text-xs font-medium ${nucleiSeverity === sev
+                    ? sev === 'critical' ? 'bg-red-600 text-white'
+                      : sev === 'high' ? 'bg-orange-500 text-white'
+                        : sev === 'medium' ? 'bg-yellow-500 text-white'
+                          : sev === 'low' ? 'bg-blue-500 text-white'
+                            : sev === 'info' ? 'bg-gray-500 text-white'
+                              : 'bg-blue-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                >
+                  {sev === '' ? '全部级别' : sev === 'critical' ? '严重' : sev === 'high' ? '高危' : sev === 'medium' ? '中危' : sev === 'low' ? '低危' : '信息'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tools Grid */}
-      {isLoading ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">加载中...</div>
-      ) : isError ? (
-        <div className="text-center py-12 text-red-500">
-          加载失败: {toolsErrorMessage}
-        </div>
-      ) : filteredTools.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>暂无工具</p>
-          <p className="text-sm">点击"上传工具"添加您的安全工具</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {filteredTools.map(tool => (
-              <ToolCard
-                key={tool.id}
-                tool={tool}
-                onView={() => { setSelectedTool(tool); setShowContent(true); }}
-                onToggle={(enabled) => toggleMutation.mutate({ id: tool.id, enabled })}
-                onDelete={() => deleteMutation.mutate(tool.id)}
-              />
-            ))}
+      {/* Nuclei 模板列表 */}
+      {isNucleiMode ? (
+        nucleiQuery.isLoading ? (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+            正在从 Kali 扫描器加载模板...
           </div>
-
-          {/* Pagination Controls */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                共 {totalItems} 个工具，第 {page} / {totalPages || 1} 页
-              </div>
-              <div className="flex items-center gap-4">
-                {/* Page Size Selector */}
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400">每页显示:</label>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                    className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value={6}>6 个</option>
-                    <option value={12}>12 个</option>
-                    <option value={24}>24 个</option>
-                    <option value={48}>48 个</option>
-                  </select>
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="px-3 py-1.5 text-sm">
-                    {page} / {totalPages || 1}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+        ) : nucleiQuery.isError ? (
+          <div className="text-center py-12 text-red-500">
+            <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>加载 Nuclei 模板失败</p>
+            <p className="text-sm mt-1">{nucleiErrorMessage}</p>
+            <p className="text-xs mt-2 text-gray-500">请确认 Kali 扫描器容器已启动且 nuclei 模板已下载</p>
+          </div>
+        ) : (nucleiQuery.data?.items.length ?? 0) === 0 ? (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>未找到匹配的模板</p>
+            <p className="text-sm">尝试调整搜索条件或严重级别过滤</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {nucleiQuery.data!.items.map(template => (
+                <NucleiTemplateCard
+                  key={template.id}
+                  template={template}
+                  onView={() => { setSelectedTemplate(template); setShowTemplateContent(true); }}
+                />
+              ))}
             </div>
+
+            {/* Pagination Controls */}
+            {(() => {
+              const nucleiTotal = nucleiQuery.data?.total ?? 0
+              const nucleiTotalPages = Math.ceil(nucleiTotal / pageSize)
+              return (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      共 {nucleiTotal} 个模板，第 {page} / {nucleiTotalPages || 1} 页
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 dark:text-gray-400">每页显示:</label>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                          className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value={12}>12 个</option>
+                          <option value={24}>24 个</option>
+                          <option value={48}>48 个</option>
+                          <option value={100}>100 个</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                          disabled={page <= 1}
+                          className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="px-3 py-1.5 text-sm">{page} / {nucleiTotalPages || 1}</span>
+                        <button
+                          onClick={() => setPage(p => Math.min(nucleiTotalPages, p + 1))}
+                          disabled={page >= nucleiTotalPages}
+                          className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </>
+        )
+      ) : (
+        /* 普通工具列表 + Kali 扫描器 */
+        isLoading ? (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">加载中...</div>
+        ) : isError ? (
+          <div className="text-center py-12 text-red-500">
+            加载失败: {toolsErrorMessage}
           </div>
-        </>
+        ) : (
+          <>
+            {/* Kali 预置扫描器区域 - 仅在扫描器标签页显示 */}
+            {isScannerMode && (
+              <div className="mb-8">
+                {kaliScannersQuery.isLoading ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center shadow mb-6">
+                    <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">正在加载系统内置扫描器...</p>
+                  </div>
+                ) : kaliScannersQuery.isError ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 text-center shadow mb-6">
+                    <AlertTriangle className="w-10 h-10 mx-auto mb-2 text-yellow-500" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">无法加载系统内置扫描器列表</p>
+                    <p className="text-xs text-gray-400 mt-1">请确认后端服务正常运行</p>
+                  </div>
+                ) : kaliScannersQuery.data ? (
+                  <KaliScannersView categories={kaliScannersQuery.data.categories} searchQuery={searchQuery} />
+                ) : null}
+              </div>
+            )}
+
+            {/* 用户上传的工具 */}
+            {filteredTools.length === 0 && !isScannerMode ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>暂无工具</p>
+                <p className="text-sm">点击"上传工具"添加您的安全工具</p>
+              </div>
+            ) : filteredTools.length > 0 ? (
+              <>
+                {!isScannerMode && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    {filteredTools.map(tool => (
+                      <ToolCard
+                        key={tool.id}
+                        tool={tool}
+                        onView={() => { setSelectedTool(tool); setShowContent(true); }}
+                        onToggle={(enabled) => toggleMutation.mutate({ id: tool.id, enabled })}
+                        onDelete={() => deleteMutation.mutate(tool.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {isScannerMode && filteredTools.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      已上传的扫描器 ({filteredTools.length})
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                      {filteredTools.map(tool => (
+                        <ToolCard
+                          key={tool.id}
+                          tool={tool}
+                          onView={() => { setSelectedTool(tool); setShowContent(true); }}
+                          onToggle={(enabled) => toggleMutation.mutate({ id: tool.id, enabled })}
+                          onDelete={() => deleteMutation.mutate(tool.id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+                {/* 分页 */}
+                {totalPages > 1 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        共 {totalItems} 个工具，第 {page} / {totalPages || 1} 页
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-gray-600 dark:text-gray-400">每页显示:</label>
+                          <select
+                            value={pageSize}
+                            onChange={(e) => { handlePageSizeChange(Number(e.target.value)); }}
+                            className="appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value={6}>6 个</option>
+                            <option value={12}>12 个</option>
+                            <option value={24}>24 个</option>
+                            <option value={48}>48 个</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="px-3 py-1.5 text-sm">
+                            {page} / {totalPages || 1}
+                          </span>
+                          <button
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <FileIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>暂无工具</p>
+                <p className="text-sm">点击"上传工具"添加您的安全工具</p>
+              </div>
+            )}
+          </>
+        )
       )}
 
       {/* Upload Modal */}
@@ -227,6 +438,14 @@ export default function Knowledgebase() {
       {/* Content Modal */}
       {showContent && selectedTool && (
         <ContentModal tool={selectedTool} onClose={() => setShowContent(false)} />
+      )}
+
+      {/* Nuclei Template Content Modal */}
+      {showTemplateContent && selectedTemplate && (
+        <NucleiTemplateContentModal
+          template={selectedTemplate}
+          onClose={() => { setShowTemplateContent(false); setSelectedTemplate(null); }}
+        />
       )}
     </div>
   )
@@ -320,6 +539,95 @@ function ToolCard({
         <span>•</span>
         <span>{formatFileSize(tool.file_size)}</span>
       </div>
+    </div>
+  )
+}
+
+// Kali 扫描器类别颜色映射
+const kaliCategoryStyles: Record<string, { color: string; bg: string; border: string }> = {
+  network: { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-800' },
+  vuln: { color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-800' },
+  web: { color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/30', border: 'border-purple-200 dark:border-purple-800' },
+  cred: { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-800' },
+  post_exploit: { color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-800' },
+}
+
+function KaliScannersView({ categories, searchQuery }: { categories: KaliScannerCategory[]; searchQuery: string }) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+
+  // 过滤类别和工具
+  const filteredCategories = categories
+    .map(cat => ({
+      ...cat,
+      tools: cat.tools.filter(t =>
+        searchQuery === '' ||
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.type.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    }))
+    .filter(cat => cat.tools.length > 0)
+
+  const totalTools = filteredCategories.reduce((sum, cat) => sum + cat.tools.length, 0)
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30 rounded-lg p-4 border border-cyan-200 dark:border-cyan-800">
+        <div className="flex items-center gap-2 mb-1">
+          <Shield className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+          <h3 className="font-semibold text-cyan-900 dark:text-cyan-100">系统内置的扫描器</h3>
+        </div>
+        <p className="text-sm text-cyan-700 dark:text-cyan-300">
+          已注册 {totalTools} 个扫描器，分为 {filteredCategories.length} 个类别。
+          扫描器运行在 Kali 容器中，由主 Agent 编排使用。
+        </p>
+      </div>
+
+      {filteredCategories.map(cat => {
+        const style = kaliCategoryStyles[cat.key] || kaliCategoryStyles.network
+        const isExpanded = expandedCategories.has(cat.key)
+        return (
+          <div key={cat.key} className={`rounded-lg border ${style.border} ${style.bg} overflow-hidden`}>
+            <button
+              onClick={() => setExpandedCategories(prev => {
+                const s = new Set(prev)
+                if (s.has(cat.key)) s.delete(cat.key)
+                else s.add(cat.key)
+                return s
+              })}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`font-semibold ${style.color}`}>{cat.name}</div>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{cat.tools.length} 个工具</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">{cat.description}</span>
+                {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+              </div>
+            </button>
+            {isExpanded && (
+              <div className="px-4 pb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                {cat.tools.map(tool => (
+                  <div key={tool.type} className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm">
+                    <Search className={`w-4 h-4 ${style.color}`} />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{tool.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{tool.type}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {filteredCategories.length === 0 && (
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <Search className="w-10 h-10 mx-auto mb-2 opacity-40" />
+          <p>未找到匹配的扫描器</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -543,6 +851,148 @@ function UploadModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function severityColor(severity: string) {
+  switch (severity) {
+    case 'critical': return 'bg-red-600 text-white'
+    case 'high': return 'bg-orange-500 text-white'
+    case 'medium': return 'bg-yellow-500 text-white'
+    case 'low': return 'bg-blue-500 text-white'
+    default: return 'bg-gray-500 text-white'
+  }
+}
+
+function severityLabel(severity: string) {
+  switch (severity) {
+    case 'critical': return '严重'
+    case 'high': return '高危'
+    case 'medium': return '中危'
+    case 'low': return '低危'
+    default: return '信息'
+  }
+}
+
+function NucleiTemplateCard({
+  template,
+  onView,
+}: {
+  template: NucleiTemplate
+  onView: () => void
+}) {
+  return (
+    <div
+      className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onView}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-purple-600 dark:text-purple-400"><Code className="w-5 h-5" /></span>
+          <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
+            {template.category}
+          </span>
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded font-medium ${severityColor(template.severity)}`}>
+          {severityLabel(template.severity)}
+        </span>
+      </div>
+
+      <h3 className="font-semibold mb-1 text-sm flex items-center gap-2 flex-wrap">
+        {template.name}
+      </h3>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 font-mono truncate">
+        {template.id}
+      </p>
+
+      {template.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {template.tags.slice(0, 5).map(tag => (
+            <span key={tag} className="text-xs px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">
+              {tag}
+            </span>
+          ))}
+          {template.tags.length > 5 && (
+            <span className="text-xs text-gray-500">+{template.tags.length - 5}</span>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <span className="truncate flex-1">{template.path}</span>
+        <span>•</span>
+        <span>{formatFileSize(template.file_size)}</span>
+      </div>
+    </div>
+  )
+}
+
+function NucleiTemplateContentModal({
+  template,
+  onClose,
+}: {
+  template: NucleiTemplate
+  onClose: () => void
+}) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['nuclei-template-content', template.path],
+    queryFn: () => getNucleiTemplateContent(template.path),
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <Code className="w-5 h-5 text-purple-600" />
+            <div>
+              <h2 className="text-lg font-semibold">{template.name}</h2>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <span className="font-mono">{template.id}</span>
+                <span>•</span>
+                <span className={`text-xs px-2 py-0.5 rounded ${severityColor(template.severity)}`}>
+                  {severityLabel(template.severity)}
+                </span>
+                <span>•</span>
+                <span>{template.category}</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tags */}
+        {template.tags.length > 0 && (
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-1">
+            <Shield className="w-4 h-4 text-gray-400 mt-0.5" />
+            {template.tags.map(tag => (
+              <span key={tag} className="text-xs px-2 py-0.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">加载中...</div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-500">无法加载模板内容</div>
+          ) : (
+            <pre className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+              {data?.content}
+            </pre>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500">
+          <span className="font-mono">{template.path}</span>
+          <span>{formatFileSize(template.file_size)}</span>
+        </div>
       </div>
     </div>
   )
