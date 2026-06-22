@@ -19,7 +19,7 @@ from app.schemas.scan import (
 settings = get_settings()
 router = APIRouter(prefix="/tools", tags=["tools"])
 
-FALLBACK_TOOLS_DIR = Path("/tmp/shelling_tools")
+FALLBACK_TOOLS_DIR = Path("/tmp/hack_scan_tools")
 ALLOWED_EXTENSIONS = {
     "script": [".py", ".sh", ".bash", ".pl", ".rb", ".js", ".ts", ".go", ".rs", ".ps1"],
     "nuclei": [".yaml", ".yml"],

@@ -1,6 +1,6 @@
-# Shelling AI
+# hack-scan
 
-Shelling AI 是一个集成大语言模型（LLM）的自动化漏洞扫描平台，提供扫描、分析、攻击路径与报告能力，面向安全测试与运营团队使用。
+hack-scan 是一个集成大语言模型（LLM）的自动化漏洞扫描平台，提供扫描、分析、攻击路径与报告能力，面向安全测试与运营团队使用。
 
 ## 功能特性
 
@@ -83,7 +83,7 @@ npm run dev
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| POSTGRES_URL | PostgreSQL 连接串 | postgresql+asyncpg://postgres:postgres@localhost:5432/vulnscanner |
+| POSTGRES_URL | PostgreSQL 连接串 | postgresql+asyncpg://postgres:postgres@localhost:5432/hack_scan |
 | MONGODB_URL | MongoDB 连接串 | mongodb://localhost:27017 |
 | REDIS_URL | Redis 连接串 | redis://localhost:6379/0 |
 | KALI_SCANNER_URL | Kali 扫描服务 | http://kali_scanner:8888 |

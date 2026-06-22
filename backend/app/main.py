@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    description="Shelling - LLM-Powered Security Scanner",
+    description="hack-scan - LLM-Powered Security Scanner",
     version="0.1.0",
     lifespan=lifespan,
     redirect_slashes=False,

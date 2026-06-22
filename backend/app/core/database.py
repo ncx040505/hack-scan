@@ -175,7 +175,7 @@ async def init_databases():
                 admin = User(
                     id=str(uuid.uuid4()),
                     username="admin",
-                    email="admin@shelling.local",
+                    email="nichenxiao040505@gmail.com",
                     password_hash=password_manager.hash_password("admin123456"),
                     role=UserRole.ADMIN,
                     is_active=True

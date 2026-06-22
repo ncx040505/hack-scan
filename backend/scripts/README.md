@@ -9,7 +9,7 @@
 临时目录位置在 `backend/app/core/config.py` 中配置：
 
 ```python
-scan_temp_dir: str = "/tmp/shelling_scans"  # 默认临时目录
+scan_temp_dir: str = "/tmp/hack_scan_scans"  # 默认临时目录
 ```
 
 可通过环境变量覆盖：
@@ -21,7 +21,7 @@ export SCAN_TEMP_DIR=/var/tmp/scans
 ## 目录结构
 
 ```
-/tmp/shelling_scans/
+/tmp/hack_scan_scans/
 ├── nmap/          # Nmap 扫描结果
 ├── nuclei/        # Nuclei 扫描结果
 └── web/           # Web 扫描结果
@@ -66,7 +66,7 @@ python backend/scripts/cleanup_temp_scans.py --max-age 1
 
 ```bash
 # 每天凌晨 3 点清理超过 24 小时的临时文件
-0 3 * * * cd /root/shelling && python backend/scripts/cleanup_temp_scans.py
+0 3 * * * cd /root/hack-scan && python backend/scripts/cleanup_temp_scans.py
 ```
 
 ### Docker 环境
@@ -78,7 +78,7 @@ services:
   api:
     volumes:
       - type: tmpfs
-        target: /tmp/shelling_scans
+        target: /tmp/hack_scan_scans
         tmpfs:
           size: 1G  # 限制最大 1GB
 ```
@@ -103,10 +103,10 @@ services:
 
 ```bash
 # 查看临时目录大小
-du -sh /tmp/shelling_scans
+du -sh /tmp/hack_scan_scans
 
 # 查看各扫描器目录大小
-du -h --max-depth=1 /tmp/shelling_scans
+du -h --max-depth=1 /tmp/hack_scan_scans
 ```
 
 ## 故障排查
@@ -115,8 +115,8 @@ du -h --max-depth=1 /tmp/shelling_scans
 
 ```bash
 # 确保应用有写权限
-sudo chown -R $(whoami) /tmp/shelling_scans
-sudo chmod -R 755 /tmp/shelling_scans
+sudo chown -R $(whoami) /tmp/hack_scan_scans
+sudo chmod -R 755 /tmp/hack_scan_scans
 ```
 
 ### 磁盘空间不足

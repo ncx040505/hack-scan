@@ -333,7 +333,7 @@ class ScanSettings(BaseModel):
     max_concurrent_scans: int = Field(default=5, ge=1, le=20, description="最大并发扫描数")
     scan_timeout: int = Field(default=3600, ge=60, le=86400, description="扫描超时时间（秒）")
     rate_limit_per_target: int = Field(default=10, ge=1, le=100, description="每个目标的请求速率限制（req/s）")
-    scan_temp_dir: str = Field(default="/tmp/shelling_scans", description="扫描临时文件目录")
+    scan_temp_dir: str = Field(default="/tmp/hack_scan_scans", description="扫描临时文件目录")
 
 
 class SystemSettings(BaseModel):

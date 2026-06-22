@@ -22,7 +22,7 @@ curl -s -X PUT "${API_BASE}/settings/system" \
       "max_concurrent_scans": 8,
       "scan_timeout": 7200,
       "rate_limit_per_target": 15,
-      "scan_temp_dir": "/tmp/shelling_scans"
+      "scan_temp_dir": "/tmp/hack_scan_scans"
     }
   }' | python3 -m json.tool
 echo -e "\n"

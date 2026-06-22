@@ -25,7 +25,7 @@ export default function Layout() {
         <div className="h-14 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="w-6 h-6 text-blue-500" />
-            <span className="text-lg font-bold">Shelling</span>
+            <span className="text-lg font-bold">hack-scan</span>
           </div>
           <button
             type="button"
@@ -50,7 +50,7 @@ export default function Layout() {
             <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Shield className="w-7 h-7 text-blue-500 flex-shrink-0" />
-                <span className="text-xl font-bold truncate">Shelling</span>
+                <span className="text-xl font-bold truncate">hack-scan</span>
               </div>
               {/* Theme Switcher - Mobile */}
               <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 flex-shrink-0">
@@ -156,7 +156,7 @@ export default function Layout() {
         <div className="h-16 px-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Shield className="w-8 h-8 text-blue-500 flex-shrink-0" />
-            <span className="text-xl font-bold truncate">Shelling</span>
+            <span className="text-xl font-bold truncate">hack-scan</span>
           </div>
           {/* Theme Switcher - Desktop */}
           <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 flex-shrink-0">

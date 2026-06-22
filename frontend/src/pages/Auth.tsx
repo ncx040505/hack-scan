@@ -66,11 +66,11 @@ export const Auth: React.FC = () => {
           <div className="brand-logo">
             <Shield className="w-16 h-16" />
           </div>
-          <h1 className="brand-title">Shelling</h1>
+          <h1 className="brand-title">hack-scan</h1>
           <p className="brand-description">
             {isRegister 
-              ? '加入 Shelling，开始进行安全扫描和漏洞分析'
-              : '使用 Shelling 进行专业的安全扫描和漏洞评估'}
+              ? '加入 hack-scan，开始进行安全扫描和漏洞分析'
+              : '使用 hack-scan 进行专业的安全扫描和漏洞评估'}
           </p>
         </div>
       </div>

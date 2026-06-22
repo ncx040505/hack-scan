@@ -7,14 +7,14 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # API Settings
-    app_name: str = "Shelling"
+    app_name: str = "hack-scan"
     debug: bool = False
     api_prefix: str = "/api/v1"
     
     # Database
-    postgres_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/vulnscanner"
+    postgres_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/hack_scan"
     mongodb_url: str = "mongodb://localhost:27017"
-    mongodb_db: str = "vulnscanner_raw"
+    mongodb_db: str = "hack_scan_raw"
     redis_url: str = "redis://localhost:6379/0"
 
     # Kali Scanner
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     max_concurrent_scans: int = 5
     scan_timeout: int = 3600  # 1 hour
     rate_limit_per_target: int = 10  # requests per second
-    scan_temp_dir: str = "/tmp/shelling_scans"  # 扫描结果临时目录
+    scan_temp_dir: str = "/tmp/hack_scan_scans"  # 扫描结果临时目录
     tools_dir: str = "/app/data/tools"  # 知识库存储目录
     
     # Security & Authentication

@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vulnscanner
+      POSTGRES_DB: hack_scan
       POSTGRES_INITDB_ARGS: "-c listen_addresses='*'"
     ports:
       - "5432:5432"
@@ -64,7 +64,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
+      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/hack_scan
       - MONGODB_URL=mongodb://mongodb:27017
       - REDIS_URL=redis://redis:6379/0
       - KALI_SCANNER_URL=http://kali_scanner:8888
@@ -93,7 +93,7 @@ services:
       dockerfile: ../docker/Dockerfile.backend
     restart: always
     environment:
-      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/vulnscanner
+      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/hack_scan
       - MONGODB_URL=mongodb://mongodb:27017
       - REDIS_URL=redis://redis:6379/0
       - KALI_SCANNER_URL=http://kali_scanner:8888
